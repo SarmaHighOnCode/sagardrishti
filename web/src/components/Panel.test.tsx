@@ -55,6 +55,28 @@ describe("Panel", () => {
     );
     expect(screen.queryByText(/of/)).toBeNull();
   });
+
+  it("caps height and enables vertical scrolling when scroll is true", () => {
+    render(
+      <Panel label="Detections" scroll>
+        <div>child content</div>
+      </Panel>,
+    );
+    const body = screen.getByText("child content").parentElement as HTMLElement;
+    expect(body.style.maxHeight).toBe("280px");
+    expect(body.style.overflowY).toBe("auto");
+  });
+
+  it("leaves height and overflow unset when scroll is false", () => {
+    render(
+      <Panel label="Detections">
+        <div>child content</div>
+      </Panel>,
+    );
+    const body = screen.getByText("child content").parentElement as HTMLElement;
+    expect(body.style.maxHeight).toBe("");
+    expect(body.style.overflowY).toBe("");
+  });
 });
 
 describe("MetricRow", () => {
