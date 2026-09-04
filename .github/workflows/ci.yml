@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python — lint & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv python install 3.11
+      - run: uv pip install --system ruff pytest pytest-timeout
+      - name: Lint
+        run: ruff check . && ruff format --check .
+      - name: Test
+        run: pytest tests/unit packages/ -v
+
+  go:
+    name: Go — vet & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+      - run: go vet ./...
+        working-directory: packages/go
+      # The aiscodec round-trip test is what makes "synthetic and real AIS
+      # share an ingest path" verifiable rather than aspirational.
+      - run: go test ./... -v
+        working-directory: packages/go
+
+  web:
+    name: Web — typecheck & lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npx tsc --noEmit
+        working-directory: web
+      - run: npm run lint
+        working-directory: web
+
+  guards:
+    name: Project guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The design system has exactly one source of colour. The PDF dossier
+      # generator reads the same tokens; drift between screen and export is a
+      # credibility failure. See docs/DESIGN_SYSTEM.md section 9.
+      - name: No hex colours outside tokens.css
+        run: |
+          if grep -rEn '#[0-9a-fA-F]{6}\b' web/src --include='*.ts' --include='*.tsx' --include='*.css' \
+             | grep -v 'styles/tokens.css'; then
+            echo "::error::Hex colour outside web/src/styles/tokens.css"
+            exit 1
+          fi
+
+      # We rank. We never accuse. Product principle 1.
+      - name: No accusatory language in user-facing strings
+        run: |
+          if grep -rniE '\b(guilty|culprit is|is responsible for the spill)\b' web/src services packages 2>/dev/null; then
+            echo "::error::Accusatory language found. The system ranks candidates."
+            exit 1
+          fi
+
+      - name: No committed secrets or data
+        run: |
+          if git ls-files | grep -E '^\.env$' ; then
+            echo "::error::Committed .env file"
+            exit 1
+          fi
+          if git ls-files 'data/*' | grep -v '^data/README.md$' ; then
+            echo "::error::Committed file under data/ — the data lake is git-ignored"
+            exit 1
+          fi

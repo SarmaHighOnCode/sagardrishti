@@ -1,0 +1,39 @@
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   Copyright 2026 Team Strawhats — SAGARDRISHTI
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+   ---------------------------------------------------------------------
+
+   NOTE ON THIRD-PARTY LICENCES
+
+   This project uses OpenDrift/OpenOil, which is licensed GPL-2.0.
+
+   OPEN ACTION for the integration lead: confirm whether our use constitutes
+   a combined work before publishing any distribution claim under Apache 2.0.
+   For SIH purposes this is a non-issue — we are not distributing binaries —
+   but the question should be answered rather than assumed.
+   See docs/DATA_SOURCES.md section 7.
+
+   Data used by this project carries its own terms:
+     Copernicus Sentinel data  — free, full and open. Attribution required.
+     Copernicus Marine Service — free, registration. Cite product IDs.
+     ECMWF ERA5                — CDS terms. Cite ECMWF.
+     GEBCO                     — free. Credit GEBCO Compilation Group.
+     NISAR / ASF DAAC          — free, registration. Cite mission and DAAC.
+     NOAA MarineCadastre       — US public domain.
+     Krestenitis/M4D dataset   — restricted, by request. DO NOT REDISTRIBUTE.
+     Blueprint (Palantir)      — Apache 2.0. Attribution.

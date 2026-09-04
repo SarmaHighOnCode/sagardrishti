@@ -1,0 +1,89 @@
+# SAGARDRISHTI - single-box stack.
+# Not Kubernetes. See docs/ARCHITECTURE.md section 11.
+#
+# Offline:  docker compose -f docker-compose.yml -f infra/compose/docker-compose.offline.yml up
+
+name: sagardrishti
+
+services:
+  db:
+    image: timescale/timescaledb-ha:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/home/postgres/pgdata/data
+      - ./db/schema:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 5
+
+  api:
+    build: { context: ., dockerfile: infra/docker/api.Dockerfile }
+    env_file: [.env]
+    ports: ["8000:8000"]
+    depends_on:
+      db:    { condition: service_healthy }
+      redis: { condition: service_healthy }
+    volumes:
+      - ./data:/data
+
+  worker:
+    build: { context: ., dockerfile: infra/docker/worker.Dockerfile }
+    env_file: [.env]
+    depends_on:
+      db:    { condition: service_healthy }
+      redis: { condition: service_healthy }
+    volumes:
+      - ./data:/data
+      - ./ml/weights:/weights:ro
+    # Drift ensembles are CPU-bound and are the real bottleneck.
+    # Segmentation wants the GPU. Comment out if no NVIDIA runtime.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - { driver: nvidia, count: 1, capabilities: [gpu] }
+
+  tiler:
+    image: ghcr.io/developmentseed/titiler:latest
+    ports: ["8001:8000"]
+    environment:
+      TITILER_API_CORS_ORIGINS: "*"
+    volumes:
+      - ./data:/data:ro
+
+  # Recorder. Deliberately depends on nothing but the database -
+  # it must run for 3 months regardless of the rest of the stack.
+  # Normally deployed OUTSIDE compose via infra/systemd/aisd.service.
+  aisd:
+    build: { context: ., dockerfile: infra/docker/aisd.Dockerfile }
+    env_file: [.env]
+    depends_on:
+      db: { condition: service_healthy }
+    restart: unless-stopped
+    volumes:
+      - aiswal:/wal
+
+  web:
+    build: { context: ./web, dockerfile: ../infra/docker/web.Dockerfile }
+    ports: ["5173:5173"]
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+      VITE_TILER_BASE_URL: ${VITE_TILER_BASE_URL}
+    depends_on: [api]
+
+volumes:
+  pgdata:
+  aiswal:

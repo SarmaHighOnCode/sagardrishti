@@ -1,0 +1,24 @@
+# Ask the owner before changing a module's public interface.
+# Replace placeholders with GitHub handles.
+
+*                       @integration-lead
+
+/packages/sagar_sar/    @ml-lead
+/ml/                    @ml-lead
+/packages/sagar_drift/  @ocean-lead
+/packages/sagar_attrib/ @ais-lead
+/services/aisd/         @ais-lead
+/services/aisgen/       @ais-lead
+/packages/go/           @ais-lead
+/services/api/          @integration-lead
+/services/worker/       @integration-lead
+/packages/sagar_evidence/ @integration-lead
+/db/                    @integration-lead
+/infra/                 @integration-lead
+/web/                   @frontend-lead
+/docs/                  @demo-owner
+/data/                  @demo-owner
+
+# Frozen after 15 October
+/docs/api/API_CONTRACT.md @integration-lead
+/db/schema/               @integration-lead

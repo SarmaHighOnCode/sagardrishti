@@ -1,0 +1,79 @@
+# Data lake - NOTHING under data/ is ever committed except the README.
+# NOTE: must be `data/*` and not `data/` — git cannot re-include a file
+# whose parent DIRECTORY is excluded, because it never descends into it.
+data/*
+!data/README.md
+
+# Model weights - same pattern, so the directory itself survives a clone
+ml/weights/*
+!ml/weights/.gitkeep
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Conda / micromamba
+.conda/
+envs/
+
+# Go
+services/aisd/aisd
+services/aisgen/aisgen
+*.exe
+*.test
+
+# Node
+node_modules/
+web/dist/
+web/.vite/
+*.local
+
+# Offline vendoring
+infra/wheels/
+infra/images/
+web/public/tiles/
+
+# Geospatial scratch
+*.tif
+*.tiff
+*.nc
+*.grib
+*.mbtiles
+!tests/fixtures/**/*.tif
+!tests/fixtures/**/*.nc
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+!.vscode/extensions.json
+*.swp
+
+# Docs build
+site/

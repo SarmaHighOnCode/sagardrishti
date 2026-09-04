@@ -1,0 +1,14 @@
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.pdf binary
+*.tif binary
+*.tiff binary
+*.nc binary
+*.mbtiles binary
+*.pt binary
+*.pth binary
+
+*.ipynb linguist-documentation
+docs/** linguist-documentation

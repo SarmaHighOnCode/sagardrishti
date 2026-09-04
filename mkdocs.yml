@@ -1,0 +1,56 @@
+site_name: SAGARDRISHTI
+site_description: Automated oil-spill detection, hindcasting and vessel attribution for Indian waters
+repo_url: https://github.com/your-org/sagardrishti
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: black
+    accent: blue
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - tables
+  - attr_list
+  - pymdownx.details
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Product:
+      - PRD: PRD.md
+      - Roadmap: ROADMAP.md
+      - Risk Register: RISK_REGISTER.md
+  - Engineering:
+      - Architecture: ARCHITECTURE.md
+      - API Contract: api/API_CONTRACT.md
+      - Development: DEVELOPMENT.md
+      - Offline Mode: OFFLINE_MODE.md
+  - Science:
+      - Domain Primer: DOMAIN_PRIMER.md
+      - Data Sources: DATA_SOURCES.md
+      - Scoring Model: SCORING_MODEL.md
+      - Evaluation: EVALUATION.md
+      - Model Cards: model_cards/README.md
+  - Design:
+      - Design System: DESIGN_SYSTEM.md
+  - Decisions:
+      - Index: adr/README.md
+      - 0001 Forward drift attribution: adr/0001-forward-drift-attribution.md
+      - 0002 Fixed GSD: adr/0002-fixed-ground-sample-distance.md
+      - 0003 Log-odds scoring: adr/0003-transparent-log-odds-scoring.md
+      - 0004 No super-resolution: adr/0004-no-super-resolution.md
+      - 0005 Go for the AIS data plane: adr/0005-go-for-the-ais-data-plane.md
+  - Presentation:
+      - Demo Script: DEMO_SCRIPT.md
+      - Viva Defence: VIVA_DEFENCE.md
+      - Glossary: GLOSSARY.md
