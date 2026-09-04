@@ -1,0 +1,105 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* Expose tokens to Tailwind utilities (bg-app, text-body, border-default …) */
+@theme inline {
+  --color-app: var(--bg-app);
+  --color-panel: var(--bg-panel);
+  --color-raised: var(--bg-raised);
+  --color-map: var(--bg-map);
+  --color-default: var(--border);
+  --color-strong: var(--border-strong);
+
+  --color-primary: var(--text-primary);
+  --color-body: var(--text-body);
+  --color-muted: var(--text-muted);
+  --color-label: var(--text-label);
+  --color-heading: var(--text-heading);
+
+  --color-interactive: var(--interactive);
+  --color-slick: var(--slick-confirmed);
+  --color-rejected: var(--slick-rejected);
+  --color-caution: var(--slick-low-confidence);
+  --color-vessel-ais: var(--vessel-ais);
+  --color-vessel-dark: var(--vessel-dark);
+  --color-backward: var(--drift-backward);
+  --color-forward: var(--drift-forward);
+
+  --font-ui: var(--font-ui);
+  --font-mono: var(--font-mono);
+
+  --radius-sharp: var(--radius);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  /* The shell is exactly viewport height. The page never scrolls;
+     individual panels scroll internally. */
+  overflow: hidden;
+  margin: 0;
+  background: var(--bg-app);
+  color: var(--text-body);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 18px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Numbers that stack vertically must align. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Every identifier, coordinate, timestamp and hash is monospace —
+   an operator reads these character by character. */
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The signature Palantir panel header. */
+.panel-label {
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-label);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-panel);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--dark-gray4);
+  border-radius: var(--radius);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--dark-gray5);
+}
+
+/* Drift particle animation is data, not decoration — but honour the
+   user's preference and fall back to static time-slices. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

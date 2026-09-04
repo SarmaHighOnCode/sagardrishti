@@ -48,6 +48,7 @@ services/aisgen/aisgen
 node_modules/
 web/dist/
 web/.vite/
+*.tsbuildinfo
 *.local
 
 # Offline vendoring

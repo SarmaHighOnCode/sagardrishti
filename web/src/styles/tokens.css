@@ -1,0 +1,165 @@
+/*
+ * SAGARDRISHTI design tokens — THE SINGLE SOURCE OF COLOUR.
+ *
+ * Values are Palantir Blueprint 6's palette, used verbatim. Blueprint is
+ * Palantir's own open-source design system, built for exactly our problem:
+ * data-dense operator interfaces where a missed detail has consequences.
+ *
+ * RULE: no hex literal may appear anywhere else in the codebase.
+ * CI enforces this (.github/workflows/ci.yml → "No hex colours outside
+ * tokens.css"). The PDF dossier generator reads these same values; drift
+ * between screen and export would be a credibility failure.
+ *
+ * Spec: docs/DESIGN_SYSTEM.md
+ */
+
+:root {
+  /* ---- Greyscale: the structural spine ------------------------------- */
+  --black: #111418;
+  --dark-gray1: #1c2127;
+  --dark-gray2: #252a31;
+  --dark-gray3: #2f343c;
+  --dark-gray4: #383e47;
+  --dark-gray5: #404854;
+  --gray1: #5f6b7c;
+  --gray2: #738091;
+  --gray3: #8f99a8;
+  --gray4: #abb3bf;
+  --gray5: #c5cbd3;
+  --light-gray1: #d3d8de;
+  --light-gray2: #dce0e5;
+  --light-gray3: #e5e8eb;
+  --light-gray4: #edeff2;
+  --light-gray5: #f6f7f9;
+  --white: #ffffff;
+
+  /* ---- Intents: meaning, never mood ---------------------------------- */
+  /* blue = interaction ONLY. Never a data encoding. */
+  --blue1: #184a90;
+  --blue2: #215db0;
+  --blue3: #2d72d2;
+  --blue4: #4c90f0;
+  --blue5: #8abbff;
+  /* green = confirmed / validated / AIS-correlated */
+  --green1: #165a36;
+  --green2: #1c6e42;
+  --green3: #238551;
+  --green4: #32a467;
+  --green5: #72ca9b;
+  /* orange = caution: degraded confidence, outside detection window */
+  --orange1: #77450d;
+  --orange2: #935610;
+  --orange3: #c87619;
+  --orange4: #ec9a3c;
+  --orange5: #fbb360;
+  /* red = confirmed slick, dark vessel, top suspect */
+  --red1: #8e292c;
+  --red2: #ac2f33;
+  --red3: #cd4246;
+  --red4: #e76a6e;
+  --red5: #fa999c;
+
+  /* ---- Extended: reserved for domain encodings ----------------------- */
+  --violet1: #5c255c;
+  --violet3: #9d3f9d;
+  --violet5: #d69fd6;
+  --cerulean1: #0c5174;
+  --cerulean3: #147eb3;
+  --cerulean5: #68c1ee;
+  --turquoise1: #004d46;
+  --turquoise3: #00a396;
+  --turquoise5: #7ae1d8;
+  --forest1: #1d7324;
+  --forest3: #29a634;
+  --vermilion1: #96290d;
+  --vermilion3: #d33d17;
+  --vermilion5: #ff9980;
+  --gold3: #d1980b;
+  --gold4: #fbd065;
+
+  /* ---- Semantic roles ------------------------------------------------ */
+  --bg-app: var(--dark-gray2);
+  --bg-panel: var(--dark-gray1);
+  --bg-raised: var(--dark-gray3);
+  --bg-map: var(--black);
+  --border: var(--dark-gray4);
+  --border-strong: var(--dark-gray5);
+  --fill-hover: var(--dark-gray4);
+  --fill-active: var(--dark-gray5);
+
+  --text-primary: var(--gray5);
+  --text-body: var(--gray4);
+  --text-muted: var(--gray3);
+  --text-label: var(--gray2);
+  --text-disabled: var(--gray1);
+  --text-heading: var(--light-gray5);
+
+  --interactive: var(--blue3);
+  --focus-ring: var(--blue4);
+
+  /* ---- Domain encodings — fixed commitments, never improvised -------- */
+  /* Spec: docs/DESIGN_SYSTEM.md §2.3 */
+  --slick-confirmed: var(--red3);
+  --slick-confirmed-stroke: var(--red4);
+  --slick-rejected: var(--gray2);
+  --slick-low-confidence: var(--orange3);
+
+  /* Vessel colours follow the SeaVision convention operators already know */
+  --vessel-ais: var(--gold4);
+  --vessel-dark: var(--red4);
+  --vessel-suspect: var(--blue4);
+  --vessel-excluded: var(--dark-gray5);
+
+  /* Backward is violet. Forward is cerulean. Consistently, everywhere. */
+  --drift-backward: var(--violet3);
+  --drift-backward-lo: var(--violet1);
+  --drift-backward-hi: var(--violet5);
+  --drift-forward: var(--cerulean3);
+  --drift-forward-lo: var(--cerulean1);
+  --drift-forward-hi: var(--cerulean5);
+
+  --origin-field-lo: var(--turquoise1);
+  --origin-field-hi: var(--turquoise5);
+  --shoreline-risk-lo: var(--vermilion1);
+  --shoreline-risk-hi: var(--vermilion5);
+  --eco-zone: var(--forest1);
+
+  /* ---- Typography ---------------------------------------------------- */
+  /* Fonts are self-hosted, never a CDN — offline mode must hold.
+     Vendor Inter + JetBrains Mono into web/public/fonts/ before the finale;
+     the stacks below degrade to system faces until then. */
+  --font-ui: Inter, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Consolas, "Courier New", monospace;
+
+  /* ---- Density ------------------------------------------------------- */
+  /* 4px base. Anything above 32px is almost certainly wrong. */
+  --sp-1: 2px;
+  --sp-2: 4px;
+  --sp-3: 6px;
+  --sp-4: 8px;
+  --sp-5: 12px;
+  --sp-6: 16px;
+  --sp-7: 24px;
+  --sp-8: 32px;
+
+  --panel-pad: 12px;
+  --panel-header-h: 32px;
+  --row-h: 24px;
+  --row-h-default: 28px;
+  --control-h: 30px;
+  --rail-w: 48px;
+  --panel-w: 380px;
+  --timeline-h: 96px;
+
+  /* 2px everywhere. Never more. Larger reads as a consumer web app. */
+  --radius: 2px;
+
+  /* Elevation comes from background value, not shadow.
+     Shadows appear only on true overlays. */
+  --shadow-overlay: 0 1px 4px rgba(17, 20, 24, 0.4);
+
+  /* ---- Motion — restraint. No bounce, no spring. --------------------- */
+  --dur-hover: 80ms;
+  --dur-panel: 140ms;
+  --ease-panel: cubic-bezier(0.4, 0, 0.2, 1);
+}
