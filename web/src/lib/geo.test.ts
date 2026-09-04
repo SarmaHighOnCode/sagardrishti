@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pointInPolygon, type LngLat } from "./geo";
+import { pointInPolygon, distSq, type LngLat } from "./geo";
 
 /**
  * Hit-testing is how an analyst selects a detection to inspect. If it is
@@ -66,5 +66,26 @@ describe("pointInPolygon", () => {
   it("returns false for a degenerate polygon", () => {
     expect(pointInPolygon([1, 1], [])).toBe(false);
     expect(pointInPolygon([1, 1], [[0, 0]])).toBe(false);
+  });
+});
+
+describe("distSq", () => {
+  it("returns 0 for coincident points", () => {
+    expect(distSq({ x: 5, y: -3 }, { x: 5, y: -3 })).toBe(0);
+  });
+
+  it("computes squared distance along a single axis", () => {
+    expect(distSq({ x: 0, y: 0 }, { x: 3, y: 0 })).toBe(9);
+    expect(distSq({ x: 0, y: 0 }, { x: 0, y: -4 })).toBe(16);
+  });
+
+  it("computes squared distance for a 3-4-5 triangle", () => {
+    expect(distSq({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(25);
+  });
+
+  it("is symmetric regardless of argument order", () => {
+    const a = { x: 12, y: -7 };
+    const b = { x: -1, y: 5 };
+    expect(distSq(a, b)).toBe(distSq(b, a));
   });
 });
