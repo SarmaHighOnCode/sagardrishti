@@ -16,12 +16,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+
+      # A venv, not --system: the runner's interpreter is Debian
+      # externally-managed and refuses --system installs, and --system would
+      # target that interpreter rather than the 3.11 uv just installed.
       - run: uv python install 3.11
-      - run: uv pip install --system ruff pytest pytest-timeout
+      - run: uv venv --python 3.11
+      - run: uv pip install ruff pytest pytest-timeout
+
       - name: Lint
-        run: ruff check . && ruff format --check .
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      # No Python sources exist yet (packages/ currently holds only READMEs).
+      # pytest exits 5 on "no tests collected", which is not a failure while
+      # the pipeline modules are unwritten. Self-activates once they land.
       - name: Test
-        run: pytest tests/unit packages/ -v
+        run: |
+          set +e
+          uv run pytest tests packages -v
+          code=$?
+          if [ "$code" -eq 5 ]; then
+            echo "No tests collected yet — treating as pass."
+            exit 0
+          fi
+          exit "$code"
 
   go:
     name: Go — vet & test
