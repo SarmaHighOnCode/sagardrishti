@@ -53,7 +53,10 @@ const { controls, handlers, getLastMap, FakeMap } = vi.hoisted(() => {
       return this.canvas;
     }
 
-    resize() {}
+    resizeCalls = 0;
+    resize() {
+      this.resizeCalls++;
+    }
 
     remove() {
       this.removed = true;
@@ -89,7 +92,11 @@ vi.mock("@deck.gl/layers", () => ({
   },
 }));
 
+let lastResizeCb: (() => void) | undefined;
 class FakeResizeObserver {
+  constructor(cb: () => void) {
+    lastResizeCb = cb;
+  }
   observe() {}
   disconnect() {}
 }
@@ -159,6 +166,16 @@ describe("MapCanvas", () => {
     expect(getLastMap()?.canvas.style.cursor).toBe("");
   });
 
+  it("resizes the map when the container's ResizeObserver fires", () => {
+    render(<MapCanvas onSelectSlick={vi.fn()} />);
+    const map = getLastMap();
+    expect(map?.resizeCalls).toBe(0);
+
+    lastResizeCb?.();
+
+    expect(map?.resizeCalls).toBe(1);
+  });
+
   it("removes the map and detaches handlers on unmount", () => {
     const { unmount } = render(<MapCanvas onSelectSlick={vi.fn()} />);
     const map = getLastMap();
@@ -200,6 +217,8 @@ describe("buildLayers (deck.gl accessor logic)", () => {
     expect(oil.classification).toBe("oil");
     expect(lookAlike.classification).toBe("look_alike");
 
+    expect(slicks.getPolygon(oil)).toBe(oil.polygon);
+
     expect(slicks.getLineWidth(oil)).toBe(1.5);
     expect(slicks.getLineWidth(lookAlike)).toBe(1);
 
@@ -224,6 +243,7 @@ describe("buildLayers (deck.gl accessor logic)", () => {
     const ais = SAMPLE_TRACKS.find((t) => t.status === "ais")!;
     const excluded: VesselTrack = { ...ais, status: "excluded", rank: undefined };
 
+    expect(tracks.getPath(rank1)).toBe(rank1.path);
     expect(tracks.getWidth(rank1)).toBe(2.5);
     expect(tracks.getWidth(rank2)).toBe(1.5);
     expect(tracks.getWidth(ais)).toBe(1.5);
@@ -246,6 +266,8 @@ describe("buildLayers (deck.gl accessor logic)", () => {
     const ships = layerById("ships");
     const dark = SAMPLE_SHIPS.find((s) => s.dark)!;
     const lit = SAMPLE_SHIPS.find((s) => !s.dark)!;
+
+    expect(ships.getPosition(dark)).toBe(dark.position);
 
     tokenCalls.length = 0;
     ships.getFillColor(dark);
