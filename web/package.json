@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "SAGARDRISHTI operator console \u2014 SAR oil-spill detection, drift hindcasting and vessel attribution",
+  "description": "SAGARDRISHTI operator console — SAR oil-spill detection, drift hindcasting and vessel attribution",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -31,6 +31,7 @@
     "eslint": "^9.17.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "globals": "^15.14.0",
+    "jsdom": "^30.0.1",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.19.0",
