@@ -28,14 +28,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # The Go data plane (aisd/aisgen/aiscodec) is not written yet. Run the
+      # Go job only once a module exists, so this activates automatically on
+      # the commit that adds it rather than failing every build until then.
+      - id: detect
+        run: |
+          if [ -f packages/go/go.mod ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No packages/go/go.mod yet — skipping Go job."
+          fi
+
       - uses: actions/setup-go@v5
+        if: steps.detect.outputs.present == 'true'
         with:
           go-version: "1.23"
+          cache-dependency-path: packages/go/go.sum
+
       - run: go vet ./...
+        if: steps.detect.outputs.present == 'true'
         working-directory: packages/go
+
       # The aiscodec round-trip test is what makes "synthetic and real AIS
       # share an ingest path" verifiable rather than aspirational.
       - run: go test ./... -v
+        if: steps.detect.outputs.present == 'true'
         working-directory: packages/go
 
   web:
@@ -73,10 +92,17 @@ jobs:
           fi
 
       # We rank. We never accuse. Product principle 1.
+      #
+      # Scans SOURCE only. Documentation is excluded on purpose: the docs
+      # discuss this rule by quoting the forbidden words, and an earlier
+      # version of this check failed on sagar_evidence/README.md stating
+      # 'Never the word "guilty."' — the guard tripping on its own rule.
       - name: No accusatory language in user-facing strings
         run: |
-          if grep -rniE '\b(guilty|culprit is|is responsible for the spill)\b' web/src services packages 2>/dev/null; then
-            echo "::error::Accusatory language found. The system ranks candidates."
+          if grep -rniE '\b(guilty|culprit is|is responsible for the spill)\b' \
+               --include='*.ts' --include='*.tsx' --include='*.py' --include='*.go' \
+               web/src services packages 2>/dev/null; then
+            echo "::error::Accusatory language found in source. The system ranks candidates."
             exit 1
           fi
 
