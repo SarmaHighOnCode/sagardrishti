@@ -12,20 +12,26 @@ Image: `timescale/timescaledb-ha:pg16` (PostGIS included).
 
 ## Tables
 
-| Table | Type | Notes |
-|---|---|---|
-| `scenes` | regular + PostGIS | Products, footprints, hashes |
-| `detections` | regular + PostGIS | Slick polygons, confidence, **penalty log as JSONB** |
-| `detection_attributes` | regular | M3 output |
-| `ship_detections` | regular + PostGIS | CFAR targets, dark-vessel flag, size bucket |
-| **`ais_positions`** | **hypertable** | Millions of rows. **Written by Go, read by Python** |
-| `ais_static` | regular | Type 5/24, latest-per-MMSI view |
-| **`ais_baseline_profiles`** | regular | **Per-vessel gap behaviour, cached.** Backs the gap anomaly factor |
-| `drift_runs` | regular | Config, forcing versions, ensemble parameters |
-| `drift_particles` | hypertable or Parquet | Large — Parquet on object store if rows get uncomfortable |
-| `suspects` | regular | Ranked candidates, **factor contributions as JSONB** |
-| `evidence_dossiers` | regular | Manifest, hashes, signature |
-| `jobs` | regular | ARQ state mirror for the UI |
+| Table | Migration | Type | Notes |
+|---|---|---|---|
+| `scenes` | `002` | regular + PostGIS | Products, footprints, hashes |
+| `detections` | `002` | regular + PostGIS | Slick polygons, confidence, **penalty log as JSONB** |
+| `detection_attributes` | `002` | regular | M3 output, 1:1 with `detections` |
+| `ship_detections` | `002` | regular + PostGIS | CFAR targets, dark-vessel flag, size bucket. `ais_match` is a bare MMSI, deliberately **not** a foreign key — see the file's own comment on why |
+| **`ais_positions`** | `001` | **hypertable** | Millions of rows. **Written by Go, read by Python** |
+| `ais_static` | `001` | regular | Type 5/24, latest-per-MMSI view |
+| **`ais_baseline_profiles`** | `001` | regular | **Per-vessel gap behaviour, cached.** Backs the gap anomaly factor |
+| `drift_runs` | `002` | regular | Config, forcing versions, ensemble parameters, as JSONB |
+| `drift_particles` | *(not yet added)* | hypertable or Parquet | Large — this is an M5 implementation decision, not a schema decision to make before the ensemble code exists. Add it once M5 is being built and the real row-count shape is known |
+| `suspects` | `002` | regular | `(detection_id, mmsi)` primary key. Ranked candidates, **factor contributions as JSONB, including negative ones** |
+| `evidence_dossiers` | `002` | regular | Manifest, hashes, signature. Regenerable — `is_current` marks the active one per detection, superseded dossiers are kept, never overwritten |
+| `jobs` | `002` | regular | ARQ state mirror for the UI. `stage` is a named stage, never a percentage |
+
+**Identifiers are app-generated strings, not `SERIAL`/`UUID`** — `det_...`, `shp_...`, `job_...`, type-prefixed, matching the worked examples in `docs/api/API_CONTRACT.md` (`"det_01H..."`). `scenes.id` is the product's own identifier (e.g. `S1C_IW_GRDH_1SDV_20260525T064012`), already globally unique.
+
+**Column names and JSONB shapes mirror `services/api/app/schemas.py` closely on purpose** — the API's fixtures are meant to become close to a drop-in read of these tables, not a redesign. If you rename a field on one side, rename it on the other, or they will quietly drift apart the same way `ais_baseline_profiles`' `median_gap_seconds`/`p95_gap_seconds` almost did against an API layer that had independently invented `typical_gap_minutes_p50/p95` — caught only because someone checked the merged schema before writing fixtures against it, not because anything would have failed loudly.
+
+**Verification status of `002`, honestly:** parsed cleanly against PostgreSQL's actual grammar (`pglast`/`libpg_query`) — zero syntax errors across 22 statements — but that does not exercise PostGIS/TimescaleDB semantics (the `GEOMETRY` type, `create_hypertable()`) or prove the constraints are satisfiable. **Apply it to a live Postgres and confirm before relying on it**, the same way `001` was verified live in PR #1.
 
 ## Why TimescaleDB for AIS
 

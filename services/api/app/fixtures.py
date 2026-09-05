@@ -284,9 +284,10 @@ VESSELS: dict[str, VesselStatic] = {
         vessel_name="SYNTHETIC VESSEL A",
         vessel_type="tanker",
         baseline_gap_profile=BaselineGapProfile(
-            computed_from_positions=3120,
-            typical_gap_minutes_p50=4.0,
-            typical_gap_minutes_p95=22.0,
+            sample_count=3120,
+            median_gap_seconds=240.0,
+            p95_gap_seconds=1320.0,
+            stale=False,
             has_sufficient_history=True,
         ),
     ),
@@ -295,12 +296,14 @@ VESSELS: dict[str, VesselStatic] = {
         imo=None,
         vessel_name="SYNTHETIC VESSEL B",
         vessel_type="container",
-        # Under two weeks of history — matches SUSPECT_2's low-confidence
-        # ais_gap_anomaly note above. See SCORING_MODEL.md §5.
+        # Under two weeks of history, below MIN_SAMPLES_FOR_BASELINE —
+        # matches SUSPECT_2's low-confidence ais_gap_anomaly note above.
+        # See SCORING_MODEL.md §5.
         baseline_gap_profile=BaselineGapProfile(
-            computed_from_positions=140,
-            typical_gap_minutes_p50=6.0,
-            typical_gap_minutes_p95=31.0,
+            sample_count=140,
+            median_gap_seconds=360.0,
+            p95_gap_seconds=1860.0,
+            stale=False,
             has_sufficient_history=False,
         ),
     ),

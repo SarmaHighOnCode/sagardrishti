@@ -233,16 +233,42 @@ class AisTrack(BaseModel):
     points: list[AisTrackPoint]
 
 
+MIN_SAMPLES_FOR_BASELINE = 30
+"""Below this many recorded positions, a gap profile exists but is not
+trusted. Threshold, not a law of nature — revisit once real AIS volume
+(post `aisd` running for weeks) shows what a stable profile actually
+needs. Centralised here so fixtures.py and the eventual real query use
+the same number rather than two guesses that quietly drift apart."""
+
+
 class BaselineGapProfile(BaseModel):
     """The per-vessel baseline that SCORING_MODEL §2.1(b) requires before
-    a gap can be judged suspicious at all. `has_sufficient_history=False`
-    is the signal the UI uses to mark the AIS-gap factor low-confidence —
-    a vessel with no history is unknown, never silently treated as
-    average. See docs/SCORING_MODEL.md §5."""
+    a gap can be judged suspicious at all.
 
-    computed_from_positions: int
-    typical_gap_minutes_p50: float
-    typical_gap_minutes_p95: float
+    Field names and units mirror db/schema/001_ais_positions.sql's
+    `ais_baseline_profiles` table directly (median_gap_seconds,
+    p95_gap_seconds, sample_count) rather than inventing API-layer names
+    — this is meant to become close to a pass-through read of that table,
+    and giving it different field names/units here would be exactly the
+    kind of two-versions-of-the-truth drift this project keeps warning
+    against elsewhere.
+
+    `has_sufficient_history` is the one field NOT stored in the DB — it
+    is derived at the API layer from `sample_count` (see
+    MIN_SAMPLES_FOR_BASELINE) as a convenience so the console doesn't
+    need to know the threshold itself. `False` is the signal the UI uses
+    to mark the AIS-gap-anomaly factor low-confidence: a vessel with too
+    little history is unknown, never silently treated as average.
+    """
+
+    sample_count: int
+    median_gap_seconds: float
+    p95_gap_seconds: float
+    # ais_baseline_profiles.stale: true until the (not-yet-built) refresh
+    # job has computed real stats for this vessel. Distinct from
+    # has_sufficient_history — a profile can be freshly computed AND still
+    # rest on too few samples to trust.
+    stale: bool
     has_sufficient_history: bool
 
 
