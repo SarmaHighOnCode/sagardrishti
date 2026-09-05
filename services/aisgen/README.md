@@ -15,15 +15,17 @@ The problem statement explicitly permits synthetic AIS. Bulk historical AIS for 
 | 1 | Lane geometry from recorded AISStream data — KDE of positions to centrelines and widths | Grounded in real Indian traffic, not invented |
 | 2 | Vessel types from realistic Indian-waters distributions | Tanker / container / bulker / fishing / tug |
 | 3 | Per-type SOG distributions, COG jitter, correct reporting intervals | Class A: 2–10 s underway, 3 min at anchor, decimated for receiver gaps |
-| 4 | **Valid bit-level encoding via `aiscodec`** | The same package `aisd` decodes with |
+| 4 | **Written through `aisd`'s own `internal/store` batched-upsert path** | The same code that writes real messages — see below |
 | 5 | **Labelled discharge events** — vessel, time, location, rate | The ground truth. Without this, attribution accuracy is unmeasurable |
 | 6 | Realistic confounders | AIS gaps, MMSI spoofing and duplication, position jumps, innocent vessels near the slick |
 
 ## Requirement 4 is the important one
 
-Synthetic messages are encoded by **the same code that decodes real ones**. That makes *"the ingest path is identical for real and synthetic data"* structurally true rather than a claim we make on a slide.
+> **Corrected 5 Sept 2026.** This requirement originally called for "valid bit-level encoding via a shared `aiscodec` package" — the assumption being that AISStream sends raw AIVDM/NMEA, decoded by `aisd` and re-encoded by `aisgen` through the same codec. That assumption was wrong: **AISStream sends pre-decoded JSON.** There is no AIVDM on this wire, so there was never anything for a codec to decode or encode. See [ADR 0005](../../docs/adr/0005-go-for-the-ais-data-plane.md) for the full correction.
 
-The `aiscodec` round-trip test is the guarantee behind it.
+The guarantee is implemented one layer downstream of where it was originally planned: `aisgen` must import and call `aisd`'s `internal/store` package directly (promoted to a location both binaries can import) rather than writing its own INSERT logic. Synthetic rows land in `ais_positions` through **the exact same batched-upsert code** that real messages go through.
+
+That is what makes *"the ingest path is identical for real and synthetic data"* structurally true rather than a claim we make on a slide — sameness of the database row, not sameness of a wire decoder. A test asserting `aisd` and `aisgen` produce byte-identical rows for equivalent input is the guarantee behind it, and it must exist before this claim is repeated anywhere else (a slide, the evidence dossier, a viva answer).
 
 ## Requirement 6 deserves care
 

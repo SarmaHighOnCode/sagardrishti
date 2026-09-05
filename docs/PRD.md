@@ -628,9 +628,8 @@ Two languages, one rule: **Go owns the data plane, Python owns the science.** Th
 
 | Component | Language | Why |
 |---|---|---|
-| `aisd` — live AIS recorder | **Go** | Runs 24/7 for three months against a feed with no replay. Supervised reconnect with exponential backoff, bounded write-behind buffer, batch COPY into Timescale. Static binary — deployable on a spare laptop, a Pi, or a free-tier VPS with no runtime to install |
-| `aisgen` — synthetic AIS generator | **Go** | Shares the AIS codec with `aisd`, so synthetic messages are encoded by the *same* code that decodes real ones. This is the strongest possible guarantee that the ingest path is identical for real and synthetic data — a claim §6.4 depends on |
-| `aiscodec` — AIVDM/NMEA encode+decode | **Go** | One implementation, two consumers. Bit-level message packing is exactly the kind of work where Go's explicitness beats Python's convenience |
+| `aisd` — live AIS recorder | **Go** | Runs 24/7 for three months against a feed with no replay. Supervised reconnect with exponential backoff, bounded write-behind buffer, batch upsert into Timescale. Static binary — deployable on a spare laptop, a Pi, or a free-tier VPS with no runtime to install. Decodes AISStream's own JSON envelope directly — AISStream sends pre-decoded JSON, not AIVDM, so there is no separate wire codec |
+| `aisgen` — synthetic AIS generator | **Go** | Shares `aisd`'s database writer (`internal/store`), so synthetic messages are inserted by the *same* code that writes real ones. This is the guarantee that the ingest path is identical for real and synthetic data — a claim §6.4 depends on — implemented at the database row, not at a wire format |
 | Everything scientific — SAR, drift, attribution, API | **Python** | PyTorch, rasterio, xarray, GeoPandas, OpenDrift. Rewriting any of this in Go would be actively negligent |
 
 **Where Go was considered and rejected:**

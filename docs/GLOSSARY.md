@@ -89,4 +89,4 @@ Terms used across this repository. Domain physics is covered more fully in [`DOM
 | **Evidence dossier** | Signed PDF with full provenance. M7 output |
 | **Baseline gap profile** | A vessel's own normal gap behaviour, the reference for gap anomaly |
 | **Data quality filter** | Pre-scoring exclusion of structurally invalid AIS records |
-| **`aisd` / `aisgen` / `aiscodec`** | The Go AIS data plane — recorder, synthetic generator, shared codec |
+| **`aisd` / `aisgen`** | The Go AIS data plane — live recorder and synthetic generator, sharing a database writer (not a wire codec — see [ADR 0005](adr/0005-go-for-the-ais-data-plane.md)) |

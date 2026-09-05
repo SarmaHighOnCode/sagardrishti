@@ -63,7 +63,7 @@ Roughly fourteen weeks. The plan below is deliberately front-loaded: a working v
 - [ ] M1 → M2 → M3 orchestrated through the worker *(ML lead, Integration)*
 - [ ] **SegFormer-B2 trained and evaluated; model card written** *(ML lead)*
 - [ ] M5 backward and forward runs callable from the API *(Ocean lead)*
-- [ ] **`aisgen` producing valid encoded AIS** via the shared `aiscodec` *(AIS lead)*
+- [ ] **`aisgen` producing valid AIS**, written through `aisd`'s shared `internal/store` path *(AIS lead)*
 - [ ] M6 per-vessel forward drift producing a ranked list — hand-set weights are fine *(AIS lead, Ocean lead)*
 - [ ] Reachability gate working; the 214 → 7 cascade real *(AIS lead)*
 - [ ] PostGIS schema stable and migrated *(Integration)*

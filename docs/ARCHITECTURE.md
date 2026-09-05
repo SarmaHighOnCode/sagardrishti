@@ -67,7 +67,7 @@ Each module is a Python package under `packages/`, with one exception noted. Mod
 | **M7** Evidence | `sagar_evidence` | Provenance capture, hashing, config snapshot, signed PDF | Everything above | Dossier PDF + manifest |
 | — Ingest | `sagar_ingest` | S1 fetch (CDSE), env fetch (CMEMS/ERA5/GEBCO), NISAR fetch | Query | Local cached artefacts |
 | — Core | `sagar_core` | Shared types, config, units, provenance primitives, logging | — | — |
-| — AIS plane | `services/aisd`, `services/aisgen`, `packages/go/aiscodec` | **Go.** Live recording, synthetic generation, AIVDM codec | WebSocket / config | Rows in TimescaleDB |
+| — AIS plane | `services/aisd`, `services/aisgen` | **Go.** Live recording (decodes AISStream's own JSON envelope — there is no AIVDM on this wire), synthetic generation (shares `aisd`'s DB writer, not a wire codec) | WebSocket / config | Rows in TimescaleDB |
 
 ### Dependency rule
 
@@ -268,10 +268,10 @@ docker compose up
 | Contract | Pydantic schemas at every module boundary | Every push |
 | Golden-file | M1 output on a fixture scene, byte-comparable | Every push |
 | Integration | Full pipeline on a small cached scene | Every PR |
-| Go | `aiscodec` round-trip: encode → decode → compare | Every push |
+| Go | `aisd`/`aisgen` write via the same `store` package: a test asserting both binaries produce byte-identical rows for equivalent input | Every push |
 | Smoke | `docker compose up` and hit every endpoint | Nightly + pre-demo |
 
-**The `aiscodec` round-trip test carries unusual weight.** It is what makes the claim "synthetic and real AIS use the same ingest path" verifiable rather than aspirational, and PRD §6.4 depends on it.
+**That shared-writer test carries unusual weight.** It is what makes the claim "synthetic and real AIS use the same ingest path" verifiable rather than aspirational, and PRD §6.4 depends on it. See [ADR 0005](adr/0005-go-for-the-ais-data-plane.md) for why this replaced an earlier, incorrect plan built around a shared AIVDM codec — AISStream sends pre-decoded JSON, so there was never any AIVDM for a codec to decode.
 
 ---
 

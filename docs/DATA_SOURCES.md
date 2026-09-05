@@ -92,7 +92,7 @@ The PS explicitly permits synthetic AIS. Built properly it is a contribution in 
 1. Derive lane geometry from recorded AISStream data — KDE of positions → lane centrelines → lane widths
 2. Sample vessel types from realistic Indian-waters distributions (tanker / container / bulker / fishing / tug)
 3. Generate tracks with per-type SOG distributions, realistic COG jitter, and correct reporting intervals (Class A: 2–10 s underway, 3 min at anchor), decimated to reflect terrestrial receiver gaps
-4. **Emit valid AIS message types 1/2/3, 5, 18/19, 24 with correct bit-level encoding** using the same `aiscodec` package that decodes real messages — so the ingest path is provably identical
+4. **Write to `ais_positions` through `aisd`'s own `internal/store` batched-upsert path**, not a parallel implementation — so the ingest path is provably identical at the point every downstream consumer actually reads it: the database row. (AISStream itself sends pre-decoded JSON, not AIVDM, so there is no wire-level codec to share here — see [ADR 0005](adr/0005-go-for-the-ais-data-plane.md).)
 5. Inject labelled ground-truth discharge events with known vessel, time, location and rate — **our only means of computing attribution accuracy**
 6. Inject realistic confounders: AIS gaps, MMSI spoofing and duplication, position jumps, innocent vessels transiting near the slick
 
