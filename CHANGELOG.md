@@ -13,6 +13,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/). Versioning: [SemVer](ht
 - AIS gap factor corrections: data quality pre-filter, per-vessel baseline profile, coarse coverage proxy
 - Dark-vessel coarse size bucket to avoid flagging AIS-exempt small craft
 - ADRs 0001–0005
+- `aisd` recorder implemented: AISStream WebSocket client with supervised reconnect (backoff + jitter), write-ahead log with crash replay, batched upsert into TimescaleDB, quality-flagging, and a JSON status file for `make ais-status`
+- `ais_positions`, `ais_static` and `ais_baseline_profiles` schema (`db/schema/001_ais_positions.sql`)
+- `services/api` hello-world FastAPI slice (`/health`, `/api/v1/`) plus `infra/docker/api.Dockerfile` and `infra/docker/aisd.Dockerfile`
+- `infra/env/geo.yml` (micromamba geo environment) and `infra/systemd/aisd.service`
+- CI job for `services/aisd` (vet + test, no live Postgres or AISStream needed — the client is tested against an in-process fake server and the recorder against a fake DB)
 
 ### Changed
 - **Attribution method:** forward drift from every vessel is primary; backtracking secondary — [ADR 0001](docs/adr/0001-forward-drift-attribution.md)

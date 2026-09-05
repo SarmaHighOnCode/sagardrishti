@@ -77,6 +77,28 @@ jobs:
         if: steps.detect.outputs.present == 'true'
         working-directory: packages/go
 
+  aisd:
+    name: aisd — vet & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: services/aisd/go.sum
+
+      - run: go vet ./...
+        working-directory: services/aisd
+
+      # No live AISStream connection or Postgres needed here: the
+      # WebSocket client is tested against an in-process fake server, and
+      # the recorder against a fake DB - see internal/aisstream and
+      # internal/recorder. That is what makes "reconnects with backoff"
+      # and "never loses data on a DB outage" checked on every push
+      # instead of only discovered live.
+      - run: go test ./... -v
+        working-directory: services/aisd
+
   web:
     name: Web — typecheck & lint
     runs-on: ubuntu-latest
