@@ -127,8 +127,13 @@ jobs:
       # credibility failure. See docs/DESIGN_SYSTEM.md section 9.
       - name: No hex colours outside tokens.css
         run: |
+          # Test files are exempt: they pass literal colour strings as
+          # fixtures to verify token-reading logic (e.g. "does this
+          # function return the CSS custom property's value"), which is
+          # not the same as a component hardcoding a colour instead of
+          # reading a token.
           if grep -rEn '#[0-9a-fA-F]{6}\b' web/src --include='*.ts' --include='*.tsx' --include='*.css' \
-             | grep -v 'styles/tokens.css'; then
+             | grep -v 'styles/tokens.css' | grep -vE '\.test\.(ts|tsx):'; then
             echo "::error::Hex colour outside web/src/styles/tokens.css"
             exit 1
           fi

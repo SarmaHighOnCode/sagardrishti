@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """AIS recorder health check. Run daily for week 1, weekly after.
 
 A recorder that silently stopped in October and is discovered in December
@@ -28,12 +27,22 @@ DEFAULT_STATUS_PATH = os.environ.get("SAGAR_AISD_STATUS_PATH", "wal/aisd_status.
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--status-file", default=DEFAULT_STATUS_PATH,
-                    help="Path to the recorder's status JSON (default: %(default)s)")
-    p.add_argument("--database-url", default=os.environ.get("DATABASE_URL"),
-                    help="Postgres DSN (default: $DATABASE_URL)")
-    p.add_argument("--hours", type=int, default=24,
-                    help="Lookback window for the DB checks (default: %(default)s)")
+    p.add_argument(
+        "--status-file",
+        default=DEFAULT_STATUS_PATH,
+        help="Path to the recorder's status JSON (default: %(default)s)",
+    )
+    p.add_argument(
+        "--database-url",
+        default=os.environ.get("DATABASE_URL"),
+        help="Postgres DSN (default: $DATABASE_URL)",
+    )
+    p.add_argument(
+        "--hours",
+        type=int,
+        default=24,
+        help="Lookback window for the DB checks (default: %(default)s)",
+    )
     return p.parse_args()
 
 
@@ -41,8 +50,10 @@ def report_status_file(path: str) -> bool:
     """Returns True if the status file looks healthy."""
     print(f"--- recorder status ({path}) ---")
     if not os.path.exists(path):
-        print("NOT FOUND. Either aisd has never run, or SAGAR_AISD_STATUS_PATH / "
-              "--status-file points somewhere else than aisd's SAGAR_AISD_WAL_DIR.")
+        print(
+            "NOT FOUND. Either aisd has never run, or SAGAR_AISD_STATUS_PATH / "
+            "--status-file points somewhere else than aisd's SAGAR_AISD_WAL_DIR."
+        )
         return False
 
     with open(path, encoding="utf-8") as f:
@@ -69,8 +80,10 @@ def report_status_file(path: str) -> bool:
 
     dropped = status.get("rows_dropped_from_memory", 0)
     if dropped:
-        print(f"  ROWS DROPPED FROM MEMORY: {dropped}  "
-              f"(still in the WAL - needs a manual replay, see internal/wal)")
+        print(
+            f"  ROWS DROPPED FROM MEMORY: {dropped}  "
+            f"(still in the WAL - needs a manual replay, see internal/wal)"
+        )
         healthy = False
 
     last_err = status.get("last_flush_error")
@@ -94,47 +107,53 @@ def report_database(database_url: str | None, hours: int) -> bool:
         return False
 
     healthy = True
-    with psycopg.connect(database_url, connect_timeout=10) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT count(*) FROM ais_positions WHERE time > now() - %s::interval",
-                (f"{hours} hours",),
-            )
-            total = cur.fetchone()[0]
-            print(f"  rows recorded:       {total}")
-            if total == 0:
-                healthy = False
+    with (
+        psycopg.connect(database_url, connect_timeout=10) as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute(
+            "SELECT count(*) FROM ais_positions WHERE time > now() - %s::interval",
+            (f"{hours} hours",),
+        )
+        total = cur.fetchone()[0]
+        print(f"  rows recorded:       {total}")
+        if total == 0:
+            healthy = False
 
-            cur.execute(
-                """
-                SELECT aoi, count(*), count(*) FILTER (WHERE data_quality = 'unreliable')
+        cur.execute(
+            """
+            SELECT aoi, count(*), count(*) FILTER (WHERE data_quality = 'unreliable')
+            FROM ais_positions
+            WHERE time > now() - %s::interval
+            GROUP BY aoi
+            ORDER BY aoi
+            """,
+            (f"{hours} hours",),
+        )
+        for aoi, count, unreliable in cur.fetchall():
+            pct = (unreliable / count * 100) if count else 0
+            print(
+                f"    {aoi:<15} {count:>8} rows  ({unreliable} unreliable, {pct:.1f}%)"
+            )
+
+        cur.execute(
+            """
+            SELECT max(gap) FROM (
+                SELECT time - lag(time) OVER (ORDER BY time) AS gap
                 FROM ais_positions
                 WHERE time > now() - %s::interval
-                GROUP BY aoi
-                ORDER BY aoi
-                """,
-                (f"{hours} hours",),
+            ) t
+            """,
+            (f"{hours} hours",),
+        )
+        row = cur.fetchone()
+        gap = row[0] if row else None
+        print(f"  largest single gap:  {gap if gap is not None else 'n/a'}")
+        if gap is not None and gap > dt.timedelta(hours=1):
+            print(
+                "  WARNING: gap over 1h suggests a connection drop that wasn't just backoff jitter."
             )
-            for aoi, count, unreliable in cur.fetchall():
-                pct = (unreliable / count * 100) if count else 0
-                print(f"    {aoi:<15} {count:>8} rows  ({unreliable} unreliable, {pct:.1f}%)")
-
-            cur.execute(
-                """
-                SELECT max(gap) FROM (
-                    SELECT time - lag(time) OVER (ORDER BY time) AS gap
-                    FROM ais_positions
-                    WHERE time > now() - %s::interval
-                ) t
-                """,
-                (f"{hours} hours",),
-            )
-            row = cur.fetchone()
-            gap = row[0] if row else None
-            print(f"  largest single gap:  {gap if gap is not None else 'n/a'}")
-            if gap is not None and gap > dt.timedelta(hours=1):
-                print("  WARNING: gap over 1h suggests a connection drop that wasn't just backoff jitter.")
-                healthy = False
+            healthy = False
 
     return healthy
 
