@@ -17,11 +17,22 @@ import psycopg
 import redis
 from fastapi import FastAPI
 
+from .routers import ais, detections, jobs, scenes, ships
+
 app = FastAPI(
     title="SAGARDRISHTI API",
     version="0.1.0",
     docs_url="/docs",
 )
+
+# docs/api/API_CONTRACT.md — DRAFT until 15 October 2026, then FROZEN.
+# See each router module's docstring for what is fixture-backed today
+# versus honestly 501 pending a pipeline that doesn't exist yet.
+app.include_router(scenes.router)
+app.include_router(detections.router)
+app.include_router(ais.router)
+app.include_router(ships.router)
+app.include_router(jobs.router)
 
 
 @app.get("/api/v1/")

@@ -6,3 +6,7 @@ fastapi==0.115.6
 uvicorn[standard]==0.34.0
 psycopg[binary]==3.2.3
 redis==5.2.1
+# Pinned explicitly, not left to FastAPI's transitive resolution: the
+# schemas in app/schemas.py ARE docs/api/API_CONTRACT.md in enforceable
+# form, so the Pydantic major version they run on is part of the contract.
+pydantic==2.10.4

@@ -22,20 +22,26 @@ jobs:
       # target that interpreter rather than the 3.11 uv just installed.
       - run: uv python install 3.11
       - run: uv venv --python 3.11
-      - run: uv pip install ruff pytest pytest-timeout
+      - run: uv pip install ruff
+      # services/api is the first real Python package in the repo — its
+      # own requirements (FastAPI, Pydantic, etc.) plus test tooling.
+      # pyproject.toml's testpaths already points pytest at it.
+      - run: uv pip install -r services/api/requirements-dev.txt
 
       - name: Lint
         run: |
           uv run ruff check .
           uv run ruff format --check .
 
-      # No Python sources exist yet (packages/ currently holds only READMEs).
-      # pytest exits 5 on "no tests collected", which is not a failure while
-      # the pipeline modules are unwritten. Self-activates once they land.
+      # tests/ and packages/ are still empty (M1-M7 unwritten). pytest
+      # would exit 5 ("no tests collected") if run over them alone, which
+      # is not a failure while those packages don't exist. services/api
+      # has real tests now, so the overall run must actually pass — only
+      # a bare exit 5 (nothing collected ANYWHERE) is tolerated.
       - name: Test
         run: |
           set +e
-          uv run pytest tests packages -v
+          uv run pytest -v
           code=$?
           if [ "$code" -eq 5 ]; then
             echo "No tests collected yet — treating as pass."

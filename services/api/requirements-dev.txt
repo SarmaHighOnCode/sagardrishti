@@ -1,0 +1,6 @@
+# Test-only. Not installed in the runtime image (infra/docker/api.Dockerfile) -
+# only in CI and local dev. See services/api/tests/.
+-r requirements.txt
+pytest==8.3.4
+pytest-timeout==2.3.1
+httpx==0.28.1

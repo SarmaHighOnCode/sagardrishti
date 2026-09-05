@@ -59,7 +59,7 @@ def report_status_file(path: str) -> bool:
     with open(path, encoding="utf-8") as f:
         status = json.load(f)
 
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
     healthy = True
 
     last_msg = status.get("last_message_at")
@@ -132,9 +132,7 @@ def report_database(database_url: str | None, hours: int) -> bool:
         )
         for aoi, count, unreliable in cur.fetchall():
             pct = (unreliable / count * 100) if count else 0
-            print(
-                f"    {aoi:<15} {count:>8} rows  ({unreliable} unreliable, {pct:.1f}%)"
-            )
+            print(f"    {aoi:<15} {count:>8} rows  ({unreliable} unreliable, {pct:.1f}%)")
 
         cur.execute(
             """
