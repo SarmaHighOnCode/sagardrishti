@@ -33,7 +33,7 @@ Roughly fourteen weeks. The plan below is deliberately front-loaded: a working v
 - [ ] Zenodo dataset downloaded and inspected *(ML lead)*
 - [ ] One Sentinel-1 scene fetched through CDSE end to end *(ML lead)*
 - [ ] OpenDrift installed, one forward run completing *(Ocean lead)*
-- [ ] Compose stack up: PostGIS + Redis + a hello-world API *(Integration)*
+- [x] Compose stack up: PostGIS + Redis + a hello-world API *(Integration)*
 - [ ] `aisd` recording verified, rows landing in Timescale *(AIS lead)*
 
 ### Week 2 — 11–18 September

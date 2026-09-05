@@ -1,0 +1,43 @@
+# AIS recorder - deployed OUTSIDE docker compose, on a machine that stays
+# up for the 3 months this needs. See services/aisd/README.md and
+# docs/adr/0005-go-for-the-ais-data-plane.md.
+#
+# Install:
+#   go build -o aisd ./cmd
+#   sudo mkdir -p /opt/sagardrishti /wal
+#   sudo cp aisd /opt/sagardrishti/aisd
+#   sudo cp infra/systemd/aisd.service /etc/systemd/system/
+#   sudo cp .env /etc/sagardrishti/aisd.env   # AISSTREAM_API_KEY, DATABASE_URL
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now aisd
+#
+# Verify:
+#   systemctl status aisd
+#   journalctl -u aisd -f
+#   make ais-status
+
+[Unit]
+Description=SAGARDRISHTI AIS recorder
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/opt/sagardrishti/aisd
+EnvironmentFile=/etc/sagardrishti/aisd.env
+Environment=SAGAR_AISD_WAL_DIR=/wal
+Restart=always
+RestartSec=5
+User=sagardrishti
+Group=sagardrishti
+
+# The write-ahead log is the durability guarantee - give it its own
+# directory with room to grow, and nothing else needs write access here.
+ReadWritePaths=/wal
+ProtectSystem=strict
+ProtectHome=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,8 @@
+# sagar-api environment. PyPI only via uv - NOT the micromamba geo
+# environment. Must never import PyTorch or GDAL; those belong to the
+# worker. See docs/DEVELOPMENT.md section 2.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+psycopg[binary]==3.2.3
+redis==5.2.1

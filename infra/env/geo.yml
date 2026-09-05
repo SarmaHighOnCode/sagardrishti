@@ -1,0 +1,45 @@
+# sagar-geo — micromamba/conda-forge environment for everything that needs
+# compiled geospatial libraries: the worker, ML training, and drift.
+#
+# Deliberately separate from the API's uv/PyPI environment - see
+# docs/DEVELOPMENT.md section 2 for why.
+#
+#   micromamba create -y -f infra/env/geo.yml
+#   micromamba activate sagar-geo
+
+name: sagar-geo
+channels:
+  - conda-forge
+  - nodefaults
+
+dependencies:
+  - python=3.11
+  - pip
+
+  # Core geospatial stack — the reason this environment exists separately.
+  - gdal
+  - proj
+  - rasterio
+  - geopandas
+  - shapely
+  - xarray
+  - netcdf4
+  - dask
+  - cartopy
+
+  # M5 — drift. OpenDrift is GPL-2.0; used as a library, never redistributed
+  # as part of a combined binary. See docs/DATA_SOURCES.md section 7.
+  - opendrift
+
+  # ML — SAR preprocessing and the segmentation baseline.
+  - pytorch
+  - torchvision
+  - scikit-image
+  - scikit-learn
+
+  - pip:
+      # Data source clients — see docs/DATA_SOURCES.md.
+      - sentinelhub
+      - pystac-client
+      - copernicusmarine
+      - cdsapi
