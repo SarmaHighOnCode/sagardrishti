@@ -30,15 +30,24 @@ These are not style preferences. Each one exists because violating it produces a
 
 | Component | State | Notes |
 |---|---|---|
-| `packages/sagar_core` | ✅ **Complete**, 63 tests | Types, units, geo, provenance, config, logs. **Depends on nothing. Start here — everything imports it** |
+| `packages/sagar_core` | ✅ **Complete**, 63 tests | Types, units, geo, provenance, config, logs. **Depends on nothing. Read this first — everything imports it** |
 | `services/api` | ✅ Full contract surface, 38 tests | Fixture-backed; unimplemented pipeline stages return honest `501` |
+| `web/src/lib/api.ts` | ✅ Typed client, 17 tests | **Built but not yet consumed** — Shell still uses fixtures. That's task B |
 | `services/aisd` | ✅ Merged (PR #1), 34 tests | Go AIS recorder. Live-verified against a real Postgres |
 | `db/schema/001` | ✅ Live-verified | AIS tables |
 | `db/schema/002` | ⚠️ **Parse-verified only** | Never run against a live Postgres — do this first when Docker works |
-| `web/` | ✅ Console UI, 100 tests | **Still on local fixtures — not wired to the API** |
+| `web/` | ✅ Console UI, 117 tests | Renders from local fixtures |
 | `packages/sagar_{ingest,sar,drift,attrib,evidence}` | ❌ Empty | READMEs only |
 | `services/worker` | ❌ Empty | |
 | `services/aisgen` | ❌ Empty | |
+
+**Open PRs at handover:** [#2](https://github.com/SarmaHighOnCode/sagardrishti/pull/2) (sagar_core + API + schema 002 + this guide) · [#3](https://github.com/SarmaHighOnCode/sagardrishti/pull/3) (API client). Both green on all five checks. Merge them before branching off `main`, or rebase onto whichever lands first.
+
+### Working agreement
+
+**Branch → push → open a PR. Never commit directly to `main`.**
+
+CI runs only on `main` pushes and pull requests, so pushing a feature branch alone gives you *no signal* — you must open the PR to see checks. (Earlier work in this repo went straight to `main`, which contradicted `CONTRIBUTING.md`. Don't copy that.)
 
 ---
 
@@ -47,8 +56,8 @@ These are not style preferences. Each one exists because violating it produces a
 Later tasks assume earlier ones. Deviating is fine if you know why.
 
 ```
-  A. Verify migration 002 on live Postgres   ← unblocks everything DB-touching
-  B. Wire console → API                      ← independent, high visibility, easy
+  A. Verify migration 002 on live Postgres   ← BLOCKED: needs the Docker daemon
+  B. Wire Shell → the API client             ← START HERE. Unblocked, self-contained
   C. sagar_ingest (fetchers + cache)         ← M1 needs it
   D. sagar_sar M1 (preprocess)               ← everything SAR needs it
   E. sagar_sar M2 (detect)  ─┐
@@ -58,6 +67,16 @@ Later tasks assume earlier ones. Deviating is fine if you know why.
   I. services/worker                         ← needs D–H
   J. sagar_evidence M7                       ← needs I
 ```
+
+### Environment reality check
+
+| Tool | State |
+|---|---|
+| Go 1.27.1, Node 24, Python 3.11 (uv) | ✅ Working |
+| Docker Desktop | ⚠️ Installed, **daemon not running** at handover (reboot was pending) |
+| WSL2 | ❌ Broken — `REGDB_E_CLASSNOTREG` |
+
+WSL2 blocks **OpenDrift (task F) only**. It does *not* block B–E: PyTorch, `rasterio` and `sentinelhub-py` all run natively on Windows. Don't let the broken WSL stop you starting.
 
 ---
 
@@ -77,29 +96,44 @@ docker compose exec db psql -U sagar -d sagardrishti -c '\d detections' -c '\d s
 
 ---
 
-## B. Wire the console to the API
+## B. Wire Shell to the API client — **start here**
 
-**Why easy:** `web/src/lib/fixtures.ts` and `services/api/app/fixtures.py` were built deliberately identifier-identical — same scene id, detection ids, MMSIs, factor values. Swapping the data source should change nothing visible.
+**The client half is already done** (`web/src/lib/api.ts`, `apiTypes.ts`, 17 tests, PR #3). What remains is consuming it. This is the best entry point: self-contained, unblocked, visible, and it makes the client stop being dead code.
 
-**Build:** `web/src/lib/api.ts` — a typed client. Types mirror `services/api/app/schemas.py`.
+**Why it should be low-risk:** `web/src/lib/fixtures.ts` and `services/api/app/fixtures.py` were built deliberately identifier-identical — same scene id (`S1C_IW_GRDH_1SDV_20260525T064012`), same detection ids (`det_synthetic_001/002`), same MMSIs, same factor values. Swap the data source and the console should look unchanged.
 
-```ts
-const BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
+### Steps
 
-export async function getDetections(sceneId?: string): Promise<Detection[]> {
-  const url = new URL(`${BASE}/detections`);
-  if (sceneId) url.searchParams.set("scene_id", sceneId);
-  const res = await fetch(url);
-  if (!res.ok) throw await problemFrom(res);   // RFC 7807 body
-  return (await res.json()).items;             // Page envelope
+1. **Add TanStack Query** — `npm i @tanstack/react-query`. Not currently installed. Wrap the app in a `QueryClientProvider` in `main.tsx`.
+
+2. **Add hooks** — `web/src/lib/queries.ts`:
+   ```ts
+   export const useDetections = (sceneId?: string) =>
+     useQuery({ queryKey: ["detections", sceneId], queryFn: () => listDetections({ scene_id: sceneId }) });
+
+   export const useSuspects = (detectionId: string) =>
+     useQuery({ queryKey: ["suspects", detectionId], queryFn: () => getSuspects(detectionId) });
+   ```
+
+3. **Convert `Shell.tsx`** from `SAMPLE_SLICKS` to `useDetections()`. It currently does `useState<SlickFeature>(SAMPLE_SLICKS[0])` — that becomes "selected id + derive from query data", with a null state while loading.
+
+4. **`MapCanvas` takes data as props.** It imports fixtures directly today; that has to become `slicks={...} tracks={...} ships={...}` so it isn't coupled to a data source.
+
+5. **Update the affected tests** (~6 in `Shell.test.tsx`, ~10 in `MapCanvas.test.tsx`). They're synchronous against fixtures; they'll need a `QueryClientProvider` wrapper and either a mocked client or `msw`. **Do not delete a test to make it pass** — if one no longer makes sense, replace it with one that asserts the same behaviour through the new path.
+
+### The one thing to get right
+
+Several endpoints return **501 by design** (`hindcast`, `forecast`, `evidence`, `analyse`). The client throws `NotImplementedError` for exactly these.
+
+```tsx
+if (error instanceof NotImplementedError) {
+  return <Panel label="Hindcast" badge="NOT BUILT">{error.problem.detail}</Panel>;
 }
 ```
 
-Then swap `Shell.tsx`'s fixture imports for TanStack Query hooks.
+> Render an honest "not available yet" panel showing the server's `detail`. **Never an empty chart** — that implies *zero drift* rather than *no drift model*, and an empty state that looks like data is a lie.
 
-**Handle honestly:** several endpoints return **501** by design (`hindcast`, `forecast`, `evidence`, `analyse`). The UI must show "not available yet", **not** an empty chart that implies zero drift. An empty state that looks like data is a lie.
-
-**Done when:** console renders identically to now, but `docker compose up` is required; the 501 panels state why; error paths render the `problem+json` `detail`.
+**Done when:** the console renders as it does now but requires `docker compose up`; 501 panels state why, quoting the server; error paths surface the `problem+json` `detail` rather than "Request failed"; all web tests pass.
 
 ---
 
@@ -320,5 +354,37 @@ make lint          # ruff + tsc + eslint + go vet
 | Attribution ranks obviously-innocent vessels | AIS gap factor uncorrected — [`SCORING_MODEL.md`](SCORING_MODEL.md) §2.1 |
 | Everything works locally, hangs at the venue | A cache miss silently fetching — [`OFFLINE_MODE.md`](OFFLINE_MODE.md) |
 | `aisgen` can't import `aisd`'s store | Go `internal/` visibility — see G |
+| `uv venv --python 3.11` fails with `REGDB_E_CLASSNOTREG`-style path error | uv's cached interpreter is corrupt: `uv python uninstall 3.11 && uv python install 3.11` |
+| Web tests fail on a missing `@testing-library/react` | `node_modules` is stale relative to `package.json` — run `npm install` |
 
-**When a doc and the code disagree, one of them is wrong — fix it, don't work around it.** That's how the `BaselineGapProfile` field-name drift was caught before it shipped.
+**When a doc and the code disagree, one of them is wrong — fix it, don't work around it.** That's how the `BaselineGapProfile` field-name drift was caught before it shipped, and how [ADR 0005](adr/0005-go-for-the-ais-data-plane.md)'s incorrect AIVDM claim was found.
+
+---
+
+## 5. Your first hour
+
+A concrete way in, rather than reading all of the above first:
+
+```bash
+git checkout main && git pull
+# Merge PRs #2 and #3 first, or branch from feat/api-and-db-schema.
+
+# Prove the toolchain works before changing anything.
+uv venv --python 3.11 .venv
+uv pip install -p .venv ruff -r services/api/requirements-dev.txt
+.venv/Scripts/python.exe -m pytest -q        # expect 101 passed
+cd web && npm install && npm test            # expect 117 passed
+```
+
+If those two numbers come back, the environment is sound and you can start on **task B**.
+
+Then, before writing anything: read `packages/sagar_core/types.py` end to end. It is ~350 lines and it encodes most of the project's non-obvious rules as executable constraints — what "uncertainty is mandatory" actually means, why a confidence drop needs a penalty log, why a backward drift run refuses to weather. Understanding those saves re-deriving them from the prose docs.
+
+### What "done" looks like for a task here
+
+1. Branch, implement, **write the tests in the same commit**
+2. `pytest -q` and `cd web && npm test` both green; `ruff check .` and `ruff format --check .` clean
+3. Push, open a PR, confirm all five CI checks pass
+4. In the PR body: say what you verified **and what you did not**. If something is untested because you lacked Docker/GPU/credentials, write that down rather than implying coverage you don't have.
+
+That last point is the one habit worth carrying forward from this repo's history. Every claim in it is either backed by a command that was actually run, or explicitly marked as unverified — `db/schema/002` being the standing example.
