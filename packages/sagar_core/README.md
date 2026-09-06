@@ -30,6 +30,29 @@ slick_age_ci: tuple[float, float]
 
 Validation rejects one without the other. Product principle 2 is enforced by the schema rather than by discipline — see [`API_CONTRACT.md`](../../docs/api/API_CONTRACT.md).
 
+## Status: implemented
+
+All six areas above are built and tested (63 tests). Layout:
+
+| File | Contains |
+|---|---|
+| `units.py` | Speed, angle, distance, area, dB, time conversions |
+| `geo.py` | `LonLat`, `BBox`, haversine, bearings, `implied_speed_knots` |
+| `types.py` | Domain models — `Scene`, `SlickPolygon`, `Suspect`, `DriftRun` … |
+| `provenance.py` | `ProvenanceRecord`, `ProvenanceChain`, hashing |
+| `config.py` | `Settings` (env-layered, secrets redacted) |
+| `logs.py` | JSON logging, `job_context`, named stages |
+
+Invariants enforced at construction, not by convention:
+
+- `SlickAgeEstimate` / `ReleaseTimeEstimate` — value and interval both required
+- `SlickPolygon` — a confidence drop with an empty penalty log is rejected
+- `DriftRun` — a backward run with weathering enabled is rejected
+- `ProvenanceChain.synthetic` — one synthetic stage marks the whole chain
+- `Settings` — secrets excluded from `repr()` and from `snapshot()`
+
+Run: `pytest packages/sagar_core -v`
+
 ## Rules
 
 - **No I/O.** No network, no database, no file reads beyond config.
