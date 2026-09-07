@@ -3,6 +3,12 @@
 // upsert: WAL replay after a crash between "DB commit succeeded" and "WAL
 // segment deleted" will re-send rows aisd already wrote, and a plain COPY
 // would abort the whole batch on the resulting primary-key collision.
+//
+// Promoted out of services/aisd/internal/store (5 Sept 2026, see ADR 0005)
+// so services/aisgen can import it too. That import is the whole point:
+// "the ingest path is identical for real and synthetic data" is true
+// because both binaries call WritePositions/WriteStatic on this exact
+// package, not because their callers happen to agree by convention.
 package store
 
 import (

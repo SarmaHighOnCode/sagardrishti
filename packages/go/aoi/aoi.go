@@ -5,6 +5,11 @@
 // AISStream's subscription API only accepts rectangular boxes. Tune these
 // with the team once real traffic density is visible - see
 // docs/DATA_SOURCES.md section 3.1.
+//
+// Promoted out of services/aisd/internal/aoi (5 Sept 2026, see ADR 0005) so
+// services/aisgen tags synthetic rows using the SAME box definitions and
+// classification logic as the live recorder, rather than a second copy
+// that could quietly drift from it.
 package aoi
 
 // Box is a rectangular bounding box as AISStream expects it: a
