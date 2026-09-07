@@ -22,6 +22,34 @@ wsl --set-default-version 2
 
 Reboot. Everything after this point happens **inside WSL2**, not in PowerShell.
 
+### The exception, while the pipeline does not exist yet
+
+The rule above is about **GDAL, PROJ and OpenDrift** — the geospatial stack. None of that is wired up yet. Today the API is entirely fixture-backed: it reads no tables and imports nothing heavier than Pydantic.
+
+So until the worker exists, you can run the whole visible system on native Windows, macOS or Linux with no Docker, no Postgres and no WSL2:
+
+```bash
+uv venv .venv
+uv pip install --python .venv -r services/api/requirements.txt -r services/api/requirements-dev.txt
+cd web && npm ci
+```
+
+Then, in two terminals:
+
+```bash
+make dev-api    # :8000  — FastAPI, reload on
+```
+
+```bash
+make dev-web    # :5173  — the console, pointed at :8000
+```
+
+Open <http://localhost:5173>. You should see the map with two detections, three AIS tracks and a ranked suspects panel — all fetched over HTTP from the API, not from `web/src/lib/fixtures.ts`.
+
+Confirm that with the Network tab: you want requests to `localhost:8000`, not an empty list. If you see **"Failed to fetch"** with nothing in the response, the API is not running or `SAGAR_CORS_ORIGINS` has been set to something that excludes your origin.
+
+Do the full WSL2 setup below **before** starting M1/M2/M5 work. Do not put it off to November.
+
 ---
 
 ## 1. Prerequisites

@@ -39,7 +39,13 @@ services:
     volumes:
       - ./data:/data
 
+  # No code yet (services/worker is empty) and no worker.Dockerfile, so it
+  # is behind a profile: an unprofiled service here makes a plain
+  # `docker compose up` fail at build time for everyone, including people
+  # who only wanted the db + api + console. Drop the profile the moment
+  # services/worker exists — see docs/HANDOVER.md task I.
   worker:
+    profiles: [worker]
     build: { context: ., dockerfile: infra/docker/worker.Dockerfile }
     env_file: [.env]
     depends_on:
@@ -67,7 +73,14 @@ services:
   # Recorder. Deliberately depends on nothing but the database -
   # it must run for 3 months regardless of the rest of the stack.
   # Normally deployed OUTSIDE compose via infra/systemd/aisd.service.
+  #
+  # Profiled because it exits 1 without AISSTREAM_API_KEY and carries
+  # restart: unless-stopped — unprofiled, a missing key turns every
+  # `docker compose up` into an endless crash loop that buries the logs
+  # of the services you were actually trying to read.
+  #   Start it explicitly:  docker compose --profile aisd up -d aisd
   aisd:
+    profiles: [aisd]
     build: { context: ., dockerfile: infra/docker/aisd.Dockerfile }
     env_file: [.env]
     depends_on:
