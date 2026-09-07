@@ -32,16 +32,17 @@ These are not style preferences. Each one exists because violating it produces a
 |---|---|---|
 | `packages/sagar_core` | ✅ **Complete**, 63 tests | Types, units, geo, provenance, config, logs. **Depends on nothing. Read this first — everything imports it** |
 | `services/api` | ✅ Full contract surface, 38 tests | Fixture-backed; unimplemented pipeline stages return honest `501` |
-| `web/src/lib/api.ts` | ✅ Typed client, 17 tests | **Built but not yet consumed** — Shell still uses fixtures. That's task B |
+| `web/src/lib/api.ts` | ✅ Typed client, 17 tests | Consumed by Shell as of task B |
+| `web/src/app/Shell.tsx` | ✅ **Wired to the API**, task B done | Fetches via `lib/queries.ts`; no longer imports `SAMPLE_*` fixture arrays. **Live-verified against no server**: shows an honest "Failed to fetch" rather than crashing — see PR #6. **Not yet verified against a running API** (Docker daemon was down at handover) |
 | `services/aisd` | ✅ Merged (PR #1), 34 tests | Go AIS recorder. Live-verified against a real Postgres |
 | `db/schema/001` | ✅ Live-verified | AIS tables |
-| `db/schema/002` | ⚠️ **Parse-verified only** | Never run against a live Postgres — do this first when Docker works |
-| `web/` | ✅ Console UI, 117 tests | Renders from local fixtures |
+| `db/schema/002` | ⚠️ **Parse-verified only** | Never run against a live Postgres — **do this first once Docker works** |
+| `web/` | ✅ Console UI, 132 tests | Data-driven; `lib/fixtures.ts` still exists and defines the shared demo identifiers the server fixtures match, but components no longer import it directly |
 | `packages/sagar_{ingest,sar,drift,attrib,evidence}` | ❌ Empty | READMEs only |
 | `services/worker` | ❌ Empty | |
 | `services/aisgen` | ❌ Empty | |
 
-**Open PRs at handover:** [#2](https://github.com/SarmaHighOnCode/sagardrishti/pull/2) (sagar_core + API + schema 002 + this guide) · [#3](https://github.com/SarmaHighOnCode/sagardrishti/pull/3) (API client). Both green on all five checks. Merge them before branching off `main`, or rebase onto whichever lands first.
+**PRs #2, #3, #6 all merged.** No open PRs at this point in the handover — task order below reflects `main` as of the merge of #6.
 
 ### Working agreement
 
@@ -56,9 +57,11 @@ CI runs only on `main` pushes and pull requests, so pushing a feature branch alo
 Later tasks assume earlier ones. Deviating is fine if you know why.
 
 ```
-  A. Verify migration 002 on live Postgres   ← BLOCKED: needs the Docker daemon
-  B. Wire Shell → the API client             ← START HERE. Unblocked, self-contained
-  C. sagar_ingest (fetchers + cache)         ← M1 needs it
+  A. Verify migration 002 on live Postgres   ← BLOCKED: needs the Docker daemon. NEXT UP
+  B. Wire Shell → the API client             ← DONE (PR #6)
+  C. sagar_ingest (fetchers + cache)         ← START HERE if Docker still isn't up.
+                                                Needs CDSE/Copernicus Marine/AISStream
+                                                accounts — none confirmed to exist yet
   D. sagar_sar M1 (preprocess)               ← everything SAR needs it
   E. sagar_sar M2 (detect)  ─┐
   F. sagar_drift M5         ─┼─ can proceed in parallel once C+D land
@@ -67,6 +70,8 @@ Later tasks assume earlier ones. Deviating is fine if you know why.
   I. services/worker                         ← needs D–H
   J. sagar_evidence M7                       ← needs I
 ```
+
+**If Docker comes up before you start:** do A first — it's a five-minute check and it de-risks everything DB-touching after it. **If Docker is still down:** don't wait on it. Task C needs external accounts more than it needs Docker, so creating those accounts (see `docs/DATA_SOURCES.md`) is the actual unblocking action, independent of the Docker situation.
 
 ### Environment reality check
 
@@ -96,44 +101,13 @@ docker compose exec db psql -U sagar -d sagardrishti -c '\d detections' -c '\d s
 
 ---
 
-## B. Wire Shell to the API client — **start here**
+## B. Wire Shell to the API client — ✅ done (PR #6)
 
-**The client half is already done** (`web/src/lib/api.ts`, `apiTypes.ts`, 17 tests, PR #3). What remains is consuming it. This is the best entry point: self-contained, unblocked, visible, and it makes the client stop being dead code.
+`Shell.tsx` fetches through `web/src/lib/queries.ts` (TanStack Query over `api.ts`). `MapCanvas` takes `slicks`/`tracks`/`ships` as props rather than importing fixtures. `web/src/lib/adapters.ts` converts wire types to the view types the map/panels already render. All affected tests (`Shell.test.tsx`, `MapCanvas.test.tsx`) updated rather than deleted.
 
-**Why it should be low-risk:** `web/src/lib/fixtures.ts` and `services/api/app/fixtures.py` were built deliberately identifier-identical — same scene id (`S1C_IW_GRDH_1SDV_20260525T064012`), same detection ids (`det_synthetic_001/002`), same MMSIs, same factor values. Swap the data source and the console should look unchanged.
+**One thing from the original plan that did NOT get done, stated plainly rather than left for someone to assume is covered:** Shell never calls `hindcast`, `forecast`, `evidence` or `analyse`, so the `NotImplementedError` → "not built yet" panel described in the original version of this section **was not exercised or wired up**, because nothing in the current UI reaches those endpoints. If a future task adds a hindcast/forecast panel, it must handle `NotImplementedError` explicitly then — the client already throws it (see `web/src/lib/api.ts`), the console has just never had a caller for it yet.
 
-### Steps
-
-1. **Add TanStack Query** — `npm i @tanstack/react-query`. Not currently installed. Wrap the app in a `QueryClientProvider` in `main.tsx`.
-
-2. **Add hooks** — `web/src/lib/queries.ts`:
-   ```ts
-   export const useDetections = (sceneId?: string) =>
-     useQuery({ queryKey: ["detections", sceneId], queryFn: () => listDetections({ scene_id: sceneId }) });
-
-   export const useSuspects = (detectionId: string) =>
-     useQuery({ queryKey: ["suspects", detectionId], queryFn: () => getSuspects(detectionId) });
-   ```
-
-3. **Convert `Shell.tsx`** from `SAMPLE_SLICKS` to `useDetections()`. It currently does `useState<SlickFeature>(SAMPLE_SLICKS[0])` — that becomes "selected id + derive from query data", with a null state while loading.
-
-4. **`MapCanvas` takes data as props.** It imports fixtures directly today; that has to become `slicks={...} tracks={...} ships={...}` so it isn't coupled to a data source.
-
-5. **Update the affected tests** (~6 in `Shell.test.tsx`, ~10 in `MapCanvas.test.tsx`). They're synchronous against fixtures; they'll need a `QueryClientProvider` wrapper and either a mocked client or `msw`. **Do not delete a test to make it pass** — if one no longer makes sense, replace it with one that asserts the same behaviour through the new path.
-
-### The one thing to get right
-
-Several endpoints return **501 by design** (`hindcast`, `forecast`, `evidence`, `analyse`). The client throws `NotImplementedError` for exactly these.
-
-```tsx
-if (error instanceof NotImplementedError) {
-  return <Panel label="Hindcast" badge="NOT BUILT">{error.problem.detail}</Panel>;
-}
-```
-
-> Render an honest "not available yet" panel showing the server's `detail`. **Never an empty chart** — that implies *zero drift* rather than *no drift model*, and an empty state that looks like data is a lie.
-
-**Done when:** the console renders as it does now but requires `docker compose up`; 501 panels state why, quoting the server; error paths surface the `problem+json` `detail` rather than "Request failed"; all web tests pass.
+**Verification gap, stated plainly:** the happy path (Shell against a *running* API) has not been checked — Docker's daemon was down at the time. What **was** verified live in a browser: with no server reachable at all, the console shows `Failed to fetch` in the Detection panel rather than crashing or rendering an empty panel that implies zero detections. **Before trusting this task is fully done, bring the stack up (`docker compose up`) and confirm the console renders real fixture-backed data identically to how it looked before this change.**
 
 ---
 
@@ -373,7 +347,7 @@ git checkout main && git pull
 uv venv --python 3.11 .venv
 uv pip install -p .venv ruff -r services/api/requirements-dev.txt
 .venv/Scripts/python.exe -m pytest -q        # expect 101 passed
-cd web && npm install && npm test            # expect 117 passed
+cd web && npm install && npm test            # expect 132 passed
 ```
 
 If those two numbers come back, the environment is sound and you can start on **task B**.
