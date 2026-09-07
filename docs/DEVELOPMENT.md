@@ -63,7 +63,7 @@ Do the full WSL2 setup below **before** starting M1/M2/M5 work. Do not put it of
 | micromamba | latest | geospatial + OpenDrift environment |
 | uv | latest | fast pure-Python environments |
 | Go | 1.23+ | AIS data plane |
-| Node | 20 LTS | frontend |
+| Node | 22 LTS or newer | frontend — jsdom 30 does not run on Node 20 |
 
 ### Verify GPU passthrough before anything else
 
