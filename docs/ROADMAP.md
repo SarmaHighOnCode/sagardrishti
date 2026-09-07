@@ -1,8 +1,10 @@
 # Roadmap
 
-**Today: 3 September 2026.** SIH 2026 launched 21 August. Internal hackathons run through September, national screening in October, **Grand Finale December 2026 (36 hours)**.
+SIH 2026 launched 21 August. Internal hackathons run through September, national screening in October, **Grand Finale December 2026 (36 hours)**.
 
 Roughly fourteen weeks. The plan below is deliberately front-loaded: a working vertical slice early beats a broad, unintegrated system late.
+
+> **Status as of 7 September 2026.** Checkboxes below are verified against `main`, not aspirational. The short version: infrastructure is well ahead of plan — CI, schema, contracts, ~5,600 lines of tested scaffolding — and the four pipeline subsystems the PS is actually judged on (M1–M7) are **at zero lines of code**. Phase 0's exit criterion is one video of a real detection drifting backward; nothing built so far produces one. See the checklist below for exactly what's outstanding, and [`HANDOVER.md`](HANDOVER.md) for the code-level next steps.
 
 ---
 
@@ -22,28 +24,29 @@ Roughly fourteen weeks. The plan below is deliberately front-loaded: a working v
 
 ### Day one — do these today
 
-- [ ] **Start the AISStream recorder** for the Arabian Sea and Bay of Bengal. *(AIS lead)* — **highest-leverage action in the project.** No replay exists; every day of delay is data permanently lost
-- [ ] Create accounts: CDSE, Copernicus Marine, ECMWF CDS, AISStream, NASA Earthdata *(Data ops)*
-- [ ] **Request the Krestenitis/M4D dataset** *(ML lead)* — long lead time, request now, do not block on it
-- [ ] Repository initialised, CI running, branch protection on *(Integration)*
+- [ ] **Start the AISStream recorder** for the Arabian Sea and Bay of Bengal. *(AIS lead)* — **highest-leverage action in the project. NOT STARTED — already 4+ days overdue.** `aisd` is built, tested (34 tests) and live-verified against a real Postgres, but it has never been run continuously against the real feed. It needs an AISStream API key and a host that stays up. No replay exists; every day of delay is data permanently lost — this is not a soft deadline, it is a shrinking ceiling on how much lane-calibration data `aisgen` will ever have
+- [ ] Create accounts: CDSE, Copernicus Marine, ECMWF CDS, AISStream, NASA Earthdata *(Data ops)* — no evidence any exist yet. **Blocks Week 1's Sentinel-1 fetch entirely**
+- [ ] **Request the Krestenitis/M4D dataset** *(ML lead)* — not requested
+- [x] Repository initialised, CI running *(Integration)* — 5 CI jobs, all green on `main`
+- [ ] Branch protection on *(Integration)* — **confirmed not enabled** (`gh api .../branches/main/protection` → 404). Needs repo admin
 
 ### Week 1 — 3–10 September
 
-- [ ] WSL2 + Docker + micromamba working on **both** machines, GPU verified *(everyone)*
-- [ ] Zenodo dataset downloaded and inspected *(ML lead)*
-- [ ] One Sentinel-1 scene fetched through CDSE end to end *(ML lead)*
-- [ ] OpenDrift installed, one forward run completing *(Ocean lead)*
-- [x] Compose stack up: PostGIS + Redis + a hello-world API *(Integration)*
-- [ ] `aisd` recording verified, rows landing in Timescale *(AIS lead)*
+- [ ] WSL2 + Docker + micromamba working on **both** machines, GPU verified *(everyone)* — WSL2 is broken on at least one machine (`REGDB_E_CLASSNOTREG`); Docker Desktop installed but the daemon was not running as of last check
+- [ ] Zenodo dataset downloaded and inspected *(ML lead)* — not started
+- [ ] One Sentinel-1 scene fetched through CDSE end to end *(ML lead)* — not started; blocked on the CDSE account above
+- [ ] OpenDrift installed, one forward run completing *(Ocean lead)* — not started; blocked on WSL2
+- [x] Compose stack up: PostGIS + Redis + a hello-world API *(Integration)* — verified live in PR #1. The API has since grown into the full contract surface (fixture-backed)
+- [ ] `aisd` recording verified, rows landing in Timescale *(AIS lead)* — the code path is tested; **no live recording has ever run**. Same item as the Day One entry above
 
 ### Week 2 — 11–18 September
 
-- [ ] M1 preprocessing producing a 40 m/px COG *(ML lead)*
-- [ ] Baseline DeepLabv3+ trained, any mIoU *(ML lead)*
-- [ ] One backward OpenDrift run producing a particle cloud *(Ocean lead)*
-- [ ] AIS decode → PostGIS → query by bbox and time *(AIS lead)*
-- [ ] MapLibre page rendering an S1 tile, a polygon and an AIS track *(Frontend)*
-- [ ] Design tokens implemented from [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) *(Frontend)*
+- [ ] M1 preprocessing producing a 40 m/px COG *(ML lead)* — not started. `packages/sagar_sar` is 0 lines
+- [ ] Baseline DeepLabv3+ trained, any mIoU *(ML lead)* — not started
+- [ ] One backward OpenDrift run producing a particle cloud *(Ocean lead)* — not started. `packages/sagar_drift` is 0 lines
+- [ ] AIS decode → PostGIS → query by bbox and time *(AIS lead)* — **partial.** `aisd` decodes and writes to `ais_positions` (tested, not yet run live). The API's `/ais/tracks` endpoint exists and is queried by the console, but currently serves fixture data, not a real PostGIS query
+- [ ] MapLibre page rendering an S1 tile, a polygon and an AIS track *(Frontend)* — **partial.** Polygon and AIS track render, wired to a live API call. **No S1 tile** — no raster tiler, no COG exists to serve
+- [x] Design tokens implemented from [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) *(Frontend)* — done
 
 ### Week 3 — 19–25 September
 
@@ -52,7 +55,7 @@ Roughly fourteen weeks. The plan below is deliberately front-loaded: a working v
 - [ ] 6-slide deck *(Demo owner)*
 - [ ] Submitted
 
-**Phase 0 exit criterion:** a video showing a real slick detected on a real scene, drifting backwards. Nothing else is required.
+**Phase 0 exit criterion:** a video showing a real slick detected on a real scene, drifting backwards. Nothing else is required. **Not yet met — no detection model and no drift engine exist.**
 
 ---
 
@@ -60,15 +63,15 @@ Roughly fourteen weeks. The plan below is deliberately front-loaded: a working v
 
 **Goal:** the full pipeline runs on one cached scene with zero manual steps.
 
-- [ ] M1 → M2 → M3 orchestrated through the worker *(ML lead, Integration)*
+- [ ] M1 → M2 → M3 orchestrated through the worker *(ML lead, Integration)* — neither M1–M3 nor `services/worker` have any code yet
 - [ ] **SegFormer-B2 trained and evaluated; model card written** *(ML lead)*
-- [ ] M5 backward and forward runs callable from the API *(Ocean lead)*
-- [ ] **`aisgen` producing valid AIS**, written through `aisd`'s shared `internal/store` path *(AIS lead)*
-- [ ] M6 per-vessel forward drift producing a ranked list — hand-set weights are fine *(AIS lead, Ocean lead)*
-- [ ] Reachability gate working; the 214 → 7 cascade real *(AIS lead)*
-- [ ] PostGIS schema stable and migrated *(Integration)*
-- [ ] Console showing detection, tracks and a suspect list from live API data *(Frontend)*
-- [ ] **Ablation 2 run early** — forward drift vs naive nearest ship *(AIS lead)*
+- [ ] M5 backward and forward runs callable from the API *(Ocean lead)* — `packages/sagar_drift` is 0 lines; the API's `hindcast`/`forecast` endpoints already exist and correctly return `501` for this reason
+- [ ] **`aisgen` producing valid AIS**, written through `aisd`'s shared `internal/store` path *(AIS lead)* — not started. Building this needs the `internal/` visibility fix noted in [ADR 0005](adr/0005-go-for-the-ais-data-plane.md) first
+- [ ] M6 per-vessel forward drift producing a ranked list — hand-set weights are fine *(AIS lead, Ocean lead)* — `packages/sagar_attrib` is 0 lines. The API's suspect-ranking endpoints exist and are fully tested, but serve fixture data, not a real scoring run
+- [ ] Reachability gate working; the 214 → 7 cascade real *(AIS lead)* — the audit-trail endpoint and UI exist and display this cascade, but the numbers are a hardcoded fixture matching the PRD's own worked example, not a computed result
+- [ ] PostGIS schema stable and migrated *(Integration)* — **partial.** Migration `001` (AIS tables) is live-verified. Migration `002` (scenes/detections/suspects/jobs) is written and parses cleanly against Postgres's real grammar but **has never been executed against a live database**
+- [ ] Console showing detection, tracks and a suspect list from live API data *(Frontend)* — **partial, same shape as the items above.** The console now genuinely fetches over HTTP rather than importing sample arrays (task B, PR #6), but the API it calls still serves fixture data, not real pipeline output. Left unchecked for the same reason the AIS-decode and MapLibre items above are: the frontend half is done, the data behind it is not
+- [ ] **Ablation 2 run early** — forward drift vs naive nearest ship *(AIS lead)* — cannot run without M5 and M6 existing
 
 > **⚠ 15 OCTOBER — FREEZE THE API CONTRACT.** After this date, changes require the integration lead's sign-off. This is the single most important date on the roadmap.
 
@@ -150,16 +153,16 @@ Each should be a few hours' work with a visible result. When a mentor suggests s
 
 ## Milestones
 
-| Date | Milestone | Hard? |
-|---|---|---|
-| **3 Sept** | AIS recorder running | **Yes — irrecoverable if missed** |
-| 25 Sept | Internal hackathon submission | Yes |
-| **15 Oct** | **API contract frozen** | **Yes** |
-| 15 Oct | End-to-end spine working | Yes |
-| 15 Nov | Feature complete; ablations done | Yes |
-| **~20 Nov** | **Offline test passed** | **Yes** |
-| Early Dec | 20 rehearsals complete | Yes |
-| Dec | Grand Finale | — |
+| Date | Milestone | Hard? | Status (7 Sept) |
+|---|---|---|---|
+| **3 Sept** | AIS recorder running | **Yes — irrecoverable if missed** | ⚠️ **Missed. 4+ days overdue and still not started** — the window did not close, but every day since 3 Sept is data that can never be recovered. Start it today regardless of how late |
+| 25 Sept | Internal hackathon submission | Yes | At risk — Phase 0 exit criterion (a real detection drifting) has zero progress with 18 days left |
+| **15 Oct** | **API contract frozen** | **Yes** | On track — contract is implemented and stable now, well ahead of schedule |
+| 15 Oct | End-to-end spine working | Yes | At risk — see Phase 1 checklist |
+| 15 Nov | Feature complete; ablations done | Yes | Too early to call |
+| **~20 Nov** | **Offline test passed** | **Yes** | Too early to call |
+| Early Dec | 20 rehearsals complete | Yes | Too early to call |
+| Dec | Grand Finale | — | — |
 
 ---
 
