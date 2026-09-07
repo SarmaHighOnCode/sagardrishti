@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from ..errors import not_found
+from ..errors import not_found, problem_responses
 
 router = APIRouter(prefix="/api/v1/jobs", tags=["jobs"])
 
@@ -22,12 +22,12 @@ _NO_JOB_STORE = (
 )
 
 
-@router.get("/{job_id}", responses={404: {}})
+@router.get("/{job_id}", responses=problem_responses(404))
 def get_job(job_id: str):
     return not_found(f"job {job_id!r} not found: {_NO_JOB_STORE}")
 
 
-@router.get("/{job_id}/events", responses={404: {}})
+@router.get("/{job_id}/events", responses=problem_responses(404))
 def get_job_events(job_id: str):
     # A real implementation streams text/event-stream; there is nothing to
     # stream, so this is a plain problem+json response, not an opened and

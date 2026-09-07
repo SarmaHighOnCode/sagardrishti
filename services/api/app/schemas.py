@@ -27,9 +27,9 @@ convention for callers to remember:
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Generic, Literal, TypeVar
 
-from pydantic import AfterValidator, BaseModel, Field
+from pydantic import AfterValidator, BaseModel
 
 from .format import is_utc_z
 
@@ -98,13 +98,22 @@ class ProblemDetail(BaseModel):
     instance: str | None = None
 
 
-class Page(BaseModel):
+ItemT = TypeVar("ItemT")
+
+
+class Page(BaseModel, Generic[ItemT]):
     """Generic list envelope. `?limit=` and `?cursor=` per the contract;
     with the small fixture datasets currently backing every list endpoint
     there is never a second page, so next_cursor is always null — this
-    will start being exercised once a real store replaces the fixtures."""
+    will start being exercised once a real store replaces the fixtures.
 
-    items: list[Any]
+    Parameterised (`Page[Detection]`, not bare `Page`) at every route.
+    `items: list[Any]` type-checked nothing and, worse, published nothing:
+    the generated OpenAPI schema described every list endpoint as
+    returning untyped objects, so the console's `Detection[]` mirrored no
+    server-side declaration at all and could drift without failing."""
+
+    items: list[ItemT]
     next_cursor: str | None = None
 
 
@@ -181,7 +190,13 @@ class SuspectFactor(BaseModel):
 class DataQualitySummary(BaseModel):
     records_used: int
     records_excluded: int
-    exclusion_reasons: dict[str, int] = Field(default_factory=dict)
+    # `= {}` rather than Field(default_factory=dict): Pydantic deep-copies
+    # a mutable default per instance, so the usual footgun does not apply,
+    # and unlike default_factory this publishes `"default": {}` into the
+    # OpenAPI schema. That is what tells a client the field is always
+    # serialised — with default_factory the schema says only "not
+    # required", which a consumer cannot distinguish from "may be absent".
+    exclusion_reasons: dict[str, int] = {}
 
 
 class Suspect(BaseModel):
@@ -293,3 +308,35 @@ class ShipDetection(BaseModel):
     estimated_length_m: tuple[float, float]
     heading_deg: float | None = None
     ais_match: str | None = None  # MMSI, or null when unmatched (dark)
+
+
+# --------------------------------------------------------------------------
+# Audit
+# --------------------------------------------------------------------------
+
+
+class AuditStage(BaseModel):
+    """One step of the candidate-elimination cascade.
+
+    `dropped` is carried explicitly rather than left as before - after.
+    The analyst is being shown why 214 vessels became 7, and a number the
+    reader has to compute themselves is a number they will not check."""
+
+    stage: str
+    before: int
+    after: int
+    dropped: int
+
+
+class AuditTrail(BaseModel):
+    """The 214 → 7 cascade behind a detection's suspect list.
+
+    Modelled here because it previously was not: `/detections/{id}/audit`
+    had no response_model, so this shape existed only in the fixture dict
+    and in the console's hand-written mirror, with nothing connecting the
+    two. Defensibility is the product — the one endpoint that explains our
+    reasoning should not be the one endpoint with no schema."""
+
+    detection_id: str
+    stages: list[AuditStage]
+    final_candidate_count: int

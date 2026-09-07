@@ -10,13 +10,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Query
 
 from .. import fixtures
-from ..errors import not_found, not_implemented
+from ..errors import not_found, not_implemented, problem_responses
 from ..schemas import Page, Scene
 
 router = APIRouter(prefix="/api/v1/scenes", tags=["scenes"])
 
 
-@router.get("", response_model=Page)
+@router.get("", response_model=Page[Scene])
 def list_scenes(
     bbox: str | None = Query(default=None, description="minlon,minlat,maxlon,maxlat"),
     start: str | None = None,
@@ -33,14 +33,14 @@ def list_scenes(
     return Page(items=scenes[:limit], next_cursor=None)
 
 
-@router.get("/{scene_id}", response_model=Scene, responses={404: {}})
+@router.get("/{scene_id}", response_model=Scene, responses=problem_responses(404))
 def get_scene(scene_id: str):
     if scene_id != fixtures.SCENE.id:
         return not_found(f"no scene with id {scene_id!r}")
     return fixtures.SCENE
 
 
-@router.post("/{scene_id}/analyse", responses={202: {}, 404: {}, 501: {}})
+@router.post("/{scene_id}/analyse", responses=problem_responses(202, 404, 501))
 def analyse_scene(scene_id: str):
     if scene_id != fixtures.SCENE.id:
         return not_found(f"no scene with id {scene_id!r}")

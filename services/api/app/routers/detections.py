@@ -17,13 +17,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Query
 
 from .. import fixtures
-from ..errors import not_found, not_implemented
-from ..schemas import Detection, Page, Suspect
+from ..errors import not_found, not_implemented, problem_responses
+from ..schemas import AuditTrail, Detection, Page, Suspect
 
 router = APIRouter(prefix="/api/v1/detections", tags=["detections"])
 
 
-@router.get("", response_model=Page)
+@router.get("", response_model=Page[Detection])
 def list_detections(
     scene_id: str | None = None,
     min_confidence: float | None = None,
@@ -37,7 +37,7 @@ def list_detections(
     return Page(items=items[:limit], next_cursor=None)
 
 
-@router.get("/{detection_id}", response_model=Detection, responses={404: {}})
+@router.get("/{detection_id}", response_model=Detection, responses=problem_responses(404))
 def get_detection(detection_id: str):
     detection = fixtures.DETECTIONS.get(detection_id)
     if detection is None:
@@ -45,14 +45,16 @@ def get_detection(detection_id: str):
     return detection
 
 
-@router.get("/{detection_id}/suspects", response_model=list[Suspect], responses={404: {}})
+@router.get(
+    "/{detection_id}/suspects", response_model=list[Suspect], responses=problem_responses(404)
+)
 def get_suspects(detection_id: str):
     if detection_id not in fixtures.DETECTIONS:
         return not_found(f"no detection with id {detection_id!r}")
     return fixtures.SUSPECTS_BY_DETECTION.get(detection_id, [])
 
 
-@router.get("/{detection_id}/hindcast", responses={404: {}, 501: {}})
+@router.get("/{detection_id}/hindcast", responses=problem_responses(404, 501))
 def get_hindcast(detection_id: str):
     if detection_id not in fixtures.DETECTIONS:
         return not_found(f"no detection with id {detection_id!r}")
@@ -64,7 +66,7 @@ def get_hindcast(detection_id: str):
     )
 
 
-@router.get("/{detection_id}/forecast", responses={404: {}, 501: {}})
+@router.get("/{detection_id}/forecast", responses=problem_responses(404, 501))
 def get_forecast(detection_id: str, hours: int = 48):
     if detection_id not in fixtures.DETECTIONS:
         return not_found(f"no detection with id {detection_id!r}")
@@ -73,7 +75,7 @@ def get_forecast(detection_id: str, hours: int = 48):
     )
 
 
-@router.get("/{detection_id}/audit", responses={404: {}})
+@router.get("/{detection_id}/audit", response_model=AuditTrail, responses=problem_responses(404))
 def get_audit(detection_id: str):
     if detection_id not in fixtures.DETECTIONS:
         return not_found(f"no detection with id {detection_id!r}")
@@ -87,7 +89,7 @@ def get_audit(detection_id: str):
     return fixtures.AUDIT_TRAIL
 
 
-@router.post("/{detection_id}/evidence", responses={202: {}, 404: {}, 501: {}})
+@router.post("/{detection_id}/evidence", responses=problem_responses(202, 404, 501))
 def request_evidence(detection_id: str):
     if detection_id not in fixtures.DETECTIONS:
         return not_found(f"no detection with id {detection_id!r}")

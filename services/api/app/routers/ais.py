@@ -12,27 +12,27 @@ from __future__ import annotations
 from fastapi import APIRouter, Query
 
 from .. import fixtures
-from ..errors import not_found
-from ..schemas import Page, VesselStatic
+from ..errors import not_found, problem_responses
+from ..schemas import AisTrack, Page, VesselStatic
 
 router = APIRouter(prefix="/api/v1/ais", tags=["ais"])
 
 
-@router.get("/tracks", response_model=Page)
+@router.get("/tracks", response_model=Page[AisTrack])
 def list_tracks(
     bbox: str | None = Query(default=None, description="minlon,minlat,maxlon,maxlat"),
     start: str | None = None,
     end: str | None = None,
     mmsi: str | None = None,
     limit: int = Query(default=50, le=500),
-) -> Page:
+) -> Page[AisTrack]:
     tracks = list(fixtures.AIS_TRACKS.values())
     if mmsi is not None:
         tracks = [t for t in tracks if t.mmsi == mmsi]
     return Page(items=tracks[:limit], next_cursor=None)
 
 
-@router.get("/vessels/{mmsi}", response_model=VesselStatic, responses={404: {}})
+@router.get("/vessels/{mmsi}", response_model=VesselStatic, responses=problem_responses(404))
 def get_vessel(mmsi: str):
     vessel = fixtures.VESSELS.get(mmsi)
     if vessel is None:

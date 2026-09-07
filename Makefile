@@ -1,10 +1,15 @@
 # SAGARDRISHTI
 # Run from WSL2. See docs/DEVELOPMENT.md
 .DEFAULT_GOAL := help
-.PHONY: help setup up down logs test test-integration lint demo warm-cache offline evaluate ais-status quota-status docs clean
+.PHONY: help setup dev-api dev-web api-schema up down logs test test-integration lint demo warm-cache offline evaluate ais-status quota-status docs clean
 
 COMPOSE        := docker compose
 COMPOSE_OFF    := docker compose -f docker-compose.yml -f infra/compose/docker-compose.offline.yml
+
+# Windows venvs put the interpreter in Scripts/, POSIX ones in bin/.
+# Detected rather than hardcoded: the team runs both, and half of the
+# current stack does not need WSL2 at all (see dev-api below).
+VENV_PY        := $(if $(wildcard .venv/Scripts/python.exe),.venv/Scripts/python.exe,.venv/bin/python)
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -21,11 +26,33 @@ setup: ## Create environments and install all dependencies
 	@echo "  NEXT: start the AIS recorder. It needs 3 months of runtime and"
 	@echo "        AISStream has no replay. See services/aisd/README.md"
 
+# --- local dev (no Docker) ----------------------------------------
+# Everything the API currently serves is fixture-backed — it reads no
+# tables. So the console + API run end to end with no database, no Redis
+# and no WSL2. Use these two targets for frontend and contract work; you
+# only need `make up` once something actually queries Postgres.
+# Run them in two terminals.
+
+dev-api: ## Run the API on :8000 with reload (no Docker, no database)
+	cd services/api && ../../$(VENV_PY) -m uvicorn app.main:app --reload --port 8000
+
+dev-web: ## Run the console on :5173 against dev-api (no Docker)
+	cd web && npm run dev
+
+# Run after ANY change to services/api/app/schemas.py and commit the
+# result — web/src/lib/contract.test.ts checks the console's types
+# against this file, and CI fails if it is stale.
+api-schema: ## Regenerate docs/api/openapi.json from schemas.py
+	$(VENV_PY) tools/export_openapi.py
+
 # --- stack --------------------------------------------------------
-up: ## Start the full stack
+up: ## Start db + redis + api + tiler + console
 	$(COMPOSE) up -d
 	@echo "  console  http://localhost:5173"
 	@echo "  api      http://localhost:8000/docs"
+	@echo ""
+	@echo "  worker and aisd are profiled off — they have no code / need a"
+	@echo "  key. Start the recorder with: $(COMPOSE) --profile aisd up -d aisd"
 
 down: ## Stop the stack
 	$(COMPOSE) down

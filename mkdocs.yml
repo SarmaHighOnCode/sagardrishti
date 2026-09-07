@@ -33,6 +33,7 @@ nav:
   - Engineering:
       - Architecture: ARCHITECTURE.md
       - API Contract: api/API_CONTRACT.md
+      - Frontend Contract: FRONTEND_CONTRACT.md
       - Development: DEVELOPMENT.md
       - Offline Mode: OFFLINE_MODE.md
   - Science:

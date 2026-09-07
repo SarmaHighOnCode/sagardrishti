@@ -49,6 +49,14 @@ jobs:
           fi
           exit "$code"
 
+      # docs/api/openapi.json is what web/src/lib/contract.test.ts checks
+      # the console's types against. If it can go stale, that test starts
+      # validating against a schema the server no longer serves — worse
+      # than no check, because it still looks green. So a schemas.py change
+      # must carry the regenerated schema in the same commit.
+      - name: API schema is committed and current
+        run: uv run python tools/export_openapi.py --check
+
   go:
     name: Go — vet & test
     runs-on: ubuntu-latest
@@ -112,14 +120,25 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # jsdom 30 requires ^22.22.2 || ^24.15.0 || >=26. On Node 20 it
+          # fails inside undici with "markAsUncloneable is not a function"
+          # — which nobody saw until `npm test` started running here.
+          # Matches the engines field in web/package.json; keep them in step.
+          node-version: "24"
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
         working-directory: web
+      # tsc is load-bearing beyond ordinary type safety here: the field
+      # manifests in src/lib/contract.ts are `satisfies FieldSpec<T>`, so
+      # the compiler is what proves they still describe apiTypes.ts. The
+      # contract test then checks apiTypes.ts against the server. Skip
+      # this and half the chain is gone.
       - run: npx tsc --noEmit
         working-directory: web
       - run: npm run lint
+        working-directory: web
+      - run: npm test
         working-directory: web
 
   guards:
@@ -156,6 +175,29 @@ jobs:
                --include='*.ts' --include='*.tsx' --include='*.py' --include='*.go' \
                web/src services packages 2>/dev/null; then
             echo "::error::Accusatory language found in source. The system ranks candidates."
+            exit 1
+          fi
+
+      # The console must render what the API returns, not a local copy of
+      # what we hoped it would return. Importing the SAMPLE_* constants
+      # into a component produces a screen that looks completely correct
+      # with the API down — the most expensive kind of wrong, because it
+      # is only discovered in front of a judge.
+      #
+      # The TYPES in fixtures.ts (SlickFeature, VesselTrack, ShipPoint) are
+      # the console's view models and are fine to import anywhere; this
+      # matches value imports of the sample data only.
+      - name: No fixture data in components
+        run: |
+          # Comment lines are skipped: Shell.tsx explains what it replaced
+          # by naming the old `useState(SAMPLE_SLICKS[0])` call, and a
+          # guard that punishes a comment for describing the rule it
+          # enforces teaches people to delete the comment.
+          if grep -rEn '\bSAMPLE_[A-Z_]+' web/src \
+               --include='*.ts' --include='*.tsx' \
+             | grep -vE '(^|/)(lib/fixtures\.ts|[^:]*\.test\.(ts|tsx)):' \
+             | grep -vE ':[0-9]+: *(//|\*|/\*)'; then
+            echo "::error::Component imports fixture data. Fetch it through lib/queries.ts instead."
             exit 1
           fi
 
