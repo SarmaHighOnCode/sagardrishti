@@ -36,3 +36,30 @@ def not_implemented(detail: str) -> JSONResponse:
     would ever process a job this API pretended to accept. See
     docs/ROADMAP.md for what each phase actually delivers."""
     return problem(501, "Not Implemented", detail)
+
+
+_DESCRIPTIONS = {
+    202: "Accepted — a job id is returned; poll /jobs/{id}.",
+    404: "No such resource. problem+json, with `detail` naming the id.",
+    501: (
+        "The endpoint is in the contract but its pipeline is not built. "
+        "An expected state today, not a failure — clients branch on it."
+    ),
+}
+
+
+def problem_responses(*statuses: int) -> dict[int | str, dict]:
+    """OpenAPI `responses=` entries for a route's error codes.
+
+    Routes previously declared `responses={404: {}}` — enough to list the
+    status code, but it published NO schema, so `ProblemDetail` never
+    appeared in the generated OpenAPI document at all. The console's
+    problem+json handling is the whole reason a 501 can be told apart
+    from a network failure; leaving its shape undeclared meant the one
+    contract every error path depends on was the one contract a client
+    could not check itself against.
+    """
+    return {
+        status: {"model": ProblemDetail, "description": _DESCRIPTIONS[status]}
+        for status in statuses
+    }

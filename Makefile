@@ -1,7 +1,7 @@
 # SAGARDRISHTI
 # Run from WSL2. See docs/DEVELOPMENT.md
 .DEFAULT_GOAL := help
-.PHONY: help setup dev-api dev-web up down logs test test-integration lint demo warm-cache offline evaluate ais-status quota-status docs clean
+.PHONY: help setup dev-api dev-web api-schema up down logs test test-integration lint demo warm-cache offline evaluate ais-status quota-status docs clean
 
 COMPOSE        := docker compose
 COMPOSE_OFF    := docker compose -f docker-compose.yml -f infra/compose/docker-compose.offline.yml
@@ -38,6 +38,12 @@ dev-api: ## Run the API on :8000 with reload (no Docker, no database)
 
 dev-web: ## Run the console on :5173 against dev-api (no Docker)
 	cd web && npm run dev
+
+# Run after ANY change to services/api/app/schemas.py and commit the
+# result — web/src/lib/contract.test.ts checks the console's types
+# against this file, and CI fails if it is stale.
+api-schema: ## Regenerate docs/api/openapi.json from schemas.py
+	$(VENV_PY) tools/export_openapi.py
 
 # --- stack --------------------------------------------------------
 up: ## Start db + redis + api + tiler + console

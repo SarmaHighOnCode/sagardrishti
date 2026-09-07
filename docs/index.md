@@ -14,6 +14,7 @@ SIH 2026 · Problem Statement 26143 · National Technical Research Organisation
 |---|---|
 | New to the project | [PRD](PRD.md), then [Domain Primer](DOMAIN_PRIMER.md) |
 | Setting up to develop | [Development](DEVELOPMENT.md) |
+| Writing console code | [Frontend Contract](FRONTEND_CONTRACT.md) |
 | Building the interface | [Design System](DESIGN_SYSTEM.md) |
 | Working on attribution | [Scoring Model](SCORING_MODEL.md) — **in full, before changing anything** |
 | Wondering why something is the way it is | [ADRs](adr/README.md) |
