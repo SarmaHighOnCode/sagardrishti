@@ -1,14 +1,11 @@
-import { useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { MapCanvas } from "../features/map/MapCanvas";
 import { Panel, MetricRow } from "../components/Panel";
 import { ConfidenceBar, FactorBar } from "../components/ConfidenceBar";
 import { StatusStrip } from "../components/StatusStrip";
-import {
-  SAMPLE_SLICKS,
-  SAMPLE_TRACKS,
-  IS_SYNTHETIC,
-  type SlickFeature,
-} from "../lib/fixtures";
+import { IS_SYNTHETIC, type SlickFeature } from "../lib/fixtures";
+import { useDetections, useShips, useSuspects, useTracks } from "../lib/queries";
+import type { Suspect } from "../lib/apiTypes";
 import {
   formatArea,
   formatBearing,
@@ -23,10 +20,33 @@ import {
  * 96px timeline. Exactly viewport height — the page never scrolls.
  *
  * Spec: docs/DESIGN_SYSTEM.md §4.2
+ *
+ * Data flows through TanStack Query hooks (lib/queries.ts) rather than
+ * lib/fixtures.ts directly. The fixture MODULE still exists — its
+ * constants define the demo's identifiers and are read by the server's
+ * fixtures too (see services/api/app/fixtures.py's own comment on this)
+ * — but the component tree no longer imports SAMPLE_* arrays itself.
  */
 export function Shell() {
-  const [selected, setSelected] = useState<SlickFeature>(SAMPLE_SLICKS[0]);
-  const onSelectSlick = useCallback((s: SlickFeature) => setSelected(s), []);
+  const detections = useDetections();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Default to the first detection once the list resolves, mirroring the
+  // old `useState(SAMPLE_SLICKS[0])` default — but data-driven, so it
+  // works whichever detection happens to come back first.
+  useEffect(() => {
+    if (selectedId === null && detections.data && detections.data.length > 0) {
+      setSelectedId(detections.data[0].id);
+    }
+  }, [selectedId, detections.data]);
+
+  const tracks = useTracks(selectedId ?? undefined);
+  const ships = useShips();
+  const suspects = useSuspects(selectedId ?? undefined);
+
+  const onSelectSlick = useCallback((s: SlickFeature) => setSelectedId(s.id), []);
+
+  const selected = detections.data?.find((d) => d.id === selectedId) ?? null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -34,10 +54,21 @@ export function Shell() {
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         <LeftRail />
         <main style={{ flex: 1, position: "relative", minWidth: 0 }}>
-          <MapCanvas onSelectSlick={onSelectSlick} />
+          <MapCanvas
+            slicks={detections.data ?? []}
+            tracks={tracks.data ?? []}
+            ships={ships.data ?? []}
+            onSelectSlick={onSelectSlick}
+          />
           <MapLegend />
         </main>
-        <AnalysisPanel slick={selected} />
+        <AnalysisPanel
+          detections={detections}
+          selected={selected}
+          suspects={suspects.data}
+          suspectsLoading={suspects.isLoading}
+          suspectsError={suspects.error}
+        />
       </div>
       <Timeline />
     </div>
@@ -184,9 +215,50 @@ function MapLegend() {
   );
 }
 
-function AnalysisPanel({ slick }: { slick: SlickFeature }) {
-  const rejected = slick.classification === "look_alike";
-  const suspects = SAMPLE_TRACKS.filter((t) => t.status === "suspect");
+/**
+ * A one-line status row for a query that hasn't resolved yet, or failed.
+ *
+ * Never falls through to an empty panel while loading — an empty
+ * Suspects panel would imply zero suspects exist, which is the same
+ * "empty state that looks like data" problem the API client's
+ * NotImplementedError handling exists to avoid for 501s. Here the cause
+ * is different (still fetching, or the network failed) but the
+ * obligation is the same: say what's actually happening.
+ */
+function QueryStatusRow({ loading, error }: { loading: boolean; error: unknown }) {
+  if (loading) {
+    return (
+      <div style={{ fontSize: 12, color: "var(--text-label)", padding: "var(--sp-3) 0" }}>
+        Loading…
+      </div>
+    );
+  }
+  if (error) {
+    const message = error instanceof Error ? error.message : "Request failed";
+    return (
+      <div style={{ fontSize: 12, color: "var(--red4)", padding: "var(--sp-3) 0" }}>
+        {message}
+      </div>
+    );
+  }
+  return null;
+}
+
+function AnalysisPanel({
+  detections,
+  selected,
+  suspects,
+  suspectsLoading,
+  suspectsError,
+}: {
+  detections: { isLoading: boolean; error: unknown };
+  selected: SlickFeature | null;
+  suspects: Suspect[] | undefined;
+  suspectsLoading: boolean;
+  suspectsError: unknown;
+}) {
+  const rejected = selected?.classification === "look_alike";
+  const topSuspect = suspects?.[0];
 
   return (
     <aside
@@ -212,39 +284,42 @@ function AnalysisPanel({ slick }: { slick: SlickFeature }) {
       >
         <Panel
           label="Detection"
-          badge={rejected ? "REJECTED" : "CONFIRMED"}
+          badge={selected ? (rejected ? "REJECTED" : "CONFIRMED") : undefined}
           badgeTone={rejected ? "caution" : "alert"}
         >
-          <MetricRow label="area" value={formatArea(slick.areaKm2)} />
-          <MetricRow label="bearing" value={formatBearing(slick.bearingDeg)} />
-          <MetricRow label="damping" value={formatDecibels(slick.dampingDb)} />
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              height: "var(--row-h)",
-            }}
-          >
-            <span style={{ color: "var(--text-label)", fontSize: 12 }}>confidence</span>
-            <ConfidenceBar value={slick.confidence} />
-          </div>
+          {!selected ? (
+            <QueryStatusRow loading={detections.isLoading} error={detections.error} />
+          ) : (
+            <>
+              <MetricRow label="area" value={formatArea(selected.areaKm2)} />
+              <MetricRow label="bearing" value={formatBearing(selected.bearingDeg)} />
+              <MetricRow label="damping" value={formatDecibels(selected.dampingDb)} />
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  height: "var(--row-h)",
+                }}
+              >
+                <span style={{ color: "var(--text-label)", fontSize: 12 }}>confidence</span>
+                <ConfidenceBar value={selected.confidence} />
+              </div>
+            </>
+          )}
         </Panel>
 
         {/* The 1:50 demo beat — say exactly WHY a candidate was demoted. */}
-        {rejected && (
+        {selected && rejected && (
           <Panel label="Why this was rejected" badge="LOOK-ALIKE" badgeTone="caution">
-            <div
-              className="mono"
-              style={{ fontSize: 12, marginBottom: "var(--sp-4)" }}
-            >
+            <div className="mono" style={{ fontSize: 12, marginBottom: "var(--sp-4)" }}>
               <span style={{ color: "var(--text-disabled)", textDecoration: "line-through" }}>
-                {slick.confidenceRaw.toFixed(2)}
+                {selected.confidenceRaw.toFixed(2)}
               </span>
               <span style={{ color: "var(--text-label)" }}> → </span>
-              <span style={{ color: "var(--orange4)" }}>{slick.confidence.toFixed(2)}</span>
+              <span style={{ color: "var(--orange4)" }}>{selected.confidence.toFixed(2)}</span>
             </div>
-            {slick.penalties.map((p) => (
+            {selected.penalties.map((p) => (
               <div
                 key={p.check}
                 style={{
@@ -262,59 +337,76 @@ function AnalysisPanel({ slick }: { slick: SlickFeature }) {
           </Panel>
         )}
 
-        <Panel label="Suspects" badge={`${suspects.length} of 214`}>
-          {suspects.map((s) => (
-            <div
-              key={s.mmsi}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--sp-4)",
-                height: "var(--row-h-default)",
-              }}
-            >
-              <span className="mono" style={{ fontSize: 12, color: "var(--text-label)" }}>
-                {s.rank}
-              </span>
-              <span className="mono" style={{ fontSize: 12, flex: 1 }}>
-                {formatMMSI(s.mmsi)}
-              </span>
-              <ConfidenceBar value={s.posterior ?? 0} width={60} />
-            </div>
-          ))}
+        <Panel label="Suspects" badge={suspects ? `${suspects.length} of 214` : undefined}>
+          {suspects === undefined ? (
+            <QueryStatusRow loading={suspectsLoading} error={suspectsError} />
+          ) : (
+            suspects.map((s) => (
+              <div
+                key={s.mmsi}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--sp-4)",
+                  height: "var(--row-h-default)",
+                }}
+              >
+                <span className="mono" style={{ fontSize: 12, color: "var(--text-label)" }}>
+                  {s.rank}
+                </span>
+                <span className="mono" style={{ fontSize: 12, flex: 1 }}>
+                  {formatMMSI(s.mmsi)}
+                </span>
+                <ConfidenceBar value={s.posterior} width={60} />
+              </div>
+            ))
+          )}
         </Panel>
 
         {/* The 6:30 demo beat — the actual arithmetic, not a black box.
-            Negative factors are shown, always. */}
-        <Panel label="Top suspect · why" badge="0.71" badgeTone="alert">
-          <div style={{ marginBottom: "var(--sp-5)" }}>
-            <div style={{ fontSize: 12, color: "var(--text-primary)" }}>
-              SYNTHETIC VESSEL A
-            </div>
-            <div className="mono" style={{ fontSize: 11, color: "var(--text-label)" }}>
-              MMSI 419001234 · tanker
-            </div>
-          </div>
-          <FactorBar name="drift consistency" contribution={2.14} />
-          <FactorBar name="course alignment" contribution={1.87} />
-          <FactorBar name="AIS gap anomaly" contribution={1.32} confidence="medium" />
-          <FactorBar name="speed anomaly" contribution={0.94} />
-          <FactorBar name="night-time release" contribution={0.41} />
-          <FactorBar name="off-lane distance" contribution={-0.22} />
-          <div
-            style={{
-              marginTop: "var(--sp-5)",
-              paddingTop: "var(--sp-4)",
-              borderTop: "1px solid var(--border)",
-            }}
+            Factors render straight from the API response, including
+            negative (exculpatory) contributions — never filtered. */}
+        {topSuspect && (
+          <Panel
+            label="Top suspect · why"
+            badge={topSuspect.posterior.toFixed(2)}
+            badgeTone="alert"
           >
-            <MetricRow label="inferred release" value="2026-05-25T06:40:00Z" />
-            <MetricRow
-              label="slick age"
-              value={formatWithInterval(7.3, [5.9, 8.8], "h")}
-            />
-          </div>
-        </Panel>
+            <div style={{ marginBottom: "var(--sp-5)" }}>
+              <div style={{ fontSize: 12, color: "var(--text-primary)" }}>
+                {topSuspect.vessel_name}
+              </div>
+              <div className="mono" style={{ fontSize: 11, color: "var(--text-label)" }}>
+                MMSI {formatMMSI(topSuspect.mmsi)} · {topSuspect.vessel_type}
+              </div>
+            </div>
+            {topSuspect.factors.map((f) => (
+              <FactorBar
+                key={f.name}
+                name={f.name.replace(/_/g, " ")}
+                contribution={f.contribution}
+                confidence={f.confidence}
+              />
+            ))}
+            <div
+              style={{
+                marginTop: "var(--sp-5)",
+                paddingTop: "var(--sp-4)",
+                borderTop: "1px solid var(--border)",
+              }}
+            >
+              <MetricRow label="inferred release" value={topSuspect.inferred_release_utc} />
+              <MetricRow
+                label="slick age"
+                value={formatWithInterval(
+                  topSuspect.slick_age_hours,
+                  topSuspect.slick_age_ci,
+                  "h",
+                )}
+              />
+            </div>
+          </Panel>
+        )}
       </div>
 
       <StatusStrip
