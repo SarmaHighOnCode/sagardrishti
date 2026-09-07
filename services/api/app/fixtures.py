@@ -247,8 +247,11 @@ SUSPECTS_BY_DETECTION: dict[str, list[Suspect]] = {
     DETECTION_OIL.id: [SUSPECT_1, SUSPECT_2],
 }
 
-# AIS tracks — SYNTHETIC VESSEL A's approach, matching SAMPLE_TRACKS[0]'s
-# path in the console fixtures.
+# AIS tracks — matching SAMPLE_TRACKS' paths in the console fixtures
+# exactly, for all three vessels, not just the top suspect. Vessel B and
+# C were originally missing here even though the console fixtures always
+# had all three: wiring the console to this API would have silently lost
+# two of three tracks on the map. Caught before it shipped, not after.
 _TRACK_A_PATH = [
     (75.10, 10.30),
     (75.30, 10.12),
@@ -256,11 +259,25 @@ _TRACK_A_PATH = [
     (75.66, 9.84),
     (75.88, 9.70),
 ]
+_TRACK_B_PATH = [
+    (75.20, 9.50),
+    (75.45, 9.60),
+    (75.70, 9.72),
+    (75.95, 9.85),
+]
+_TRACK_C_PATH = [
+    (75.00, 9.90),
+    (75.25, 9.95),
+    (75.50, 10.02),
+]
 
-AIS_TRACKS: dict[str, AisTrack] = {
-    "419001234": AisTrack(
-        mmsi="419001234",
-        vessel_name="SYNTHETIC VESSEL A",
+
+def _track(
+    mmsi: str, name: str, path: list[tuple[float, float]], sog: float, cog: float
+) -> AisTrack:
+    return AisTrack(
+        mmsi=mmsi,
+        vessel_name=name,
         points=[
             AisTrackPoint(
                 # 40-minute reporting interval, ending at the scene's
@@ -268,13 +285,19 @@ AIS_TRACKS: dict[str, AisTrack] = {
                 time_utc=format_utc(datetime(2026, 5, 25, 4, 0, 0) + timedelta(minutes=40 * i)),
                 lat=lat,
                 lon=lon,
-                sog_knots=11.2,
-                cog_degrees=247.0,
+                sog_knots=sog,
+                cog_degrees=cog,
                 data_quality="ok",
             )
-            for i, (lon, lat) in enumerate(_TRACK_A_PATH)
+            for i, (lon, lat) in enumerate(path)
         ],
-    ),
+    )
+
+
+AIS_TRACKS: dict[str, AisTrack] = {
+    "419001234": _track("419001234", "SYNTHETIC VESSEL A", _TRACK_A_PATH, sog=11.2, cog=247.0),
+    "563889000": _track("563889000", "SYNTHETIC VESSEL B", _TRACK_B_PATH, sog=14.8, cog=214.0),
+    "477995100": _track("477995100", "SYNTHETIC VESSEL C", _TRACK_C_PATH, sog=9.5, cog=196.0),
 }
 
 VESSELS: dict[str, VesselStatic] = {

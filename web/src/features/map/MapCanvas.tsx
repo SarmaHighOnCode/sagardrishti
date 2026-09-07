@@ -13,14 +13,7 @@ import { PolygonLayer, PathLayer, ScatterplotLayer } from "@deck.gl/layers";
 import { makeDarkBaseStyle, DEFAULT_VIEW } from "../../lib/mapStyle";
 import { token } from "../../lib/tokens";
 import { pointInPolygon } from "../../lib/geo";
-import {
-  SAMPLE_SLICKS,
-  SAMPLE_TRACKS,
-  SAMPLE_SHIPS,
-  type SlickFeature,
-  type VesselTrack,
-  type ShipPoint,
-} from "../../lib/fixtures";
+import type { ShipPoint, SlickFeature, VesselTrack } from "../../lib/fixtures";
 
 /**
  * The map is the application. Everything else floats over it.
@@ -31,12 +24,28 @@ import {
  * Spec: docs/DESIGN_SYSTEM.md §5
  */
 export function MapCanvas({
+  slicks,
+  tracks,
+  ships,
   onSelectSlick,
 }: {
+  slicks: SlickFeature[];
+  tracks: VesselTrack[];
+  ships: ShipPoint[];
   onSelectSlick: (s: SlickFeature) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const overlayRef = useRef<MapboxOverlay | null>(null);
+
+  // Hit-testing and layer updates read from refs, not closure-captured
+  // props: the mount effect below runs once, but `slicks` changes every
+  // time a query refetches, and a stale closure would keep testing
+  // clicks against whatever data existed at mount.
+  const slicksRef = useRef(slicks);
+  useEffect(() => {
+    slicksRef.current = slicks;
+  }, [slicks]);
 
   useEffect(() => {
     if (!container.current || mapRef.current) return;
@@ -56,8 +65,9 @@ export function MapCanvas({
 
     const overlay = new MapboxOverlay({
       interleaved: false,
-      layers: buildLayers(),
+      layers: buildLayers(slicksRef.current, tracks, ships),
     });
+    overlayRef.current = overlay;
     map.addControl(overlay);
 
     // Hit-testing is done geographically against our own geometry rather
@@ -65,10 +75,11 @@ export function MapCanvas({
     // "Hover reveals, click commits" — docs/DESIGN_SYSTEM.md §5.
     const slickAt = (e: MapMouseEvent): SlickFeature | undefined => {
       const { lng, lat } = e.lngLat;
+      const current = slicksRef.current;
       // Reverse order so the topmost drawn polygon wins a hit.
-      for (let i = SAMPLE_SLICKS.length - 1; i >= 0; i--) {
-        if (pointInPolygon([lng, lat], SAMPLE_SLICKS[i].polygon)) {
-          return SAMPLE_SLICKS[i];
+      for (let i = current.length - 1; i >= 0; i--) {
+        if (pointInPolygon([lng, lat], current[i].polygon)) {
+          return current[i];
         }
       }
       return undefined;
@@ -100,8 +111,18 @@ export function MapCanvas({
       map.off("mousemove", handleMove);
       map.remove();
       mapRef.current = null;
+      overlayRef.current = null;
     };
+    // Mount once. `slicks`/`tracks`/`ships` are read via refs / the effect
+    // below rather than added here — remounting the whole map (and losing
+    // pan/zoom state) every time a query refetches would be wrong.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onSelectSlick]);
+
+  // Push new data into the existing overlay without touching the map.
+  useEffect(() => {
+    overlayRef.current?.setProps({ layers: buildLayers(slicks, tracks, ships) });
+  }, [slicks, tracks, ships]);
 
   return (
     <div
@@ -111,14 +132,14 @@ export function MapCanvas({
   );
 }
 
-function buildLayers() {
+function buildLayers(slicks: SlickFeature[], tracks: VesselTrack[], ships: ShipPoint[]) {
   return [
     // Slick polygons. Confirmed oil is the only saturated red fill on the map;
     // rejected candidates stay visible but clearly demoted so the analyst can
     // still inspect why they were rejected.
     new PolygonLayer<SlickFeature>({
       id: "slicks",
-      data: SAMPLE_SLICKS,
+      data: slicks,
       getPolygon: (d) => d.polygon,
       filled: true,
       stroked: true,
@@ -138,7 +159,7 @@ function buildLayers() {
     // Vessel tracks. Rank 1 brightest; excluded traffic present but recessive.
     new PathLayer<VesselTrack>({
       id: "tracks",
-      data: SAMPLE_TRACKS,
+      data: tracks,
       getPath: (d) => d.path,
       getColor: (d) =>
         d.status === "suspect"
@@ -155,7 +176,7 @@ function buildLayers() {
     // already know: AIS-broadcasting gold, uncorrelated (dark) red.
     new ScatterplotLayer<ShipPoint>({
       id: "ships",
-      data: SAMPLE_SHIPS,
+      data: ships,
       getPosition: (d) => d.position,
       getFillColor: (d) =>
         d.dark ? token("--vessel-dark", 230) : token("--vessel-ais", 230),
