@@ -58,47 +58,42 @@ CI runs only on `main` pushes and pull requests, so pushing a feature branch alo
 Later tasks assume earlier ones. Deviating is fine if you know why.
 
 ```
-  A. Verify migration 002 on live Postgres   ← BLOCKED: needs the Docker daemon. NEXT UP
+  A. Verify migration 002 on live Postgres   ← DONE, 8 September 2026 (Docker came up)
   B. Wire Shell → the API client             ← DONE (PR #6)
-  C. sagar_ingest (fetchers + cache)         ← START HERE if Docker still isn't up.
-                                                Needs CDSE/Copernicus Marine/AISStream
-                                                accounts — none confirmed to exist yet
+  C. sagar_ingest (fetchers + cache)         ← START HERE. Needs CDSE/Copernicus Marine/
+                                                AISStream accounts — none confirmed to exist yet
   D. sagar_sar M1 (preprocess)               ← everything SAR needs it
   E. sagar_sar M2 (detect)  ─┐
   F. sagar_drift M5         ─┼─ can proceed in parallel once C+D land
-  G. aisgen                 ─┘  ← DONE except live-DB verification (Docker)
-  H. sagar_attrib M6                         ← needs F + G
+  G. aisgen                 ─┘  ← DONE except live-DB verification (Docker's up now — worth doing)
+  H. sagar_attrib M6                         ← SCORE/RANK stages DONE without waiting on F —
+                                                see task H below for why that was possible and
+                                                what's still blocked
   I. services/worker                         ← needs D–H
   J. sagar_evidence M7                       ← needs I
 ```
 
-**If Docker comes up before you start:** do A first — it's a five-minute check and it de-risks everything DB-touching after it. **If Docker is still down:** don't wait on it. Task C needs external accounts more than it needs Docker, so creating those accounts (see `docs/DATA_SOURCES.md`) is the actual unblocking action, independent of the Docker situation.
+Task H turned out not to strictly need F first: its SCORE/RANK stages (the log-odds model) take a drift result as a *parameter* rather than computing one, so they were buildable — and genuinely useful, wired into the live API — before F exists. Worth knowing before assuming this list's ordering is a hard dependency graph rather than a reasonable default.
+
+**Docker is up as of 8 September 2026.** Task A is done. That unblocks live-DB work generally, but does not by itself unblock C (still needs external accounts), F (still needs WSL2/OpenDrift), or D/E (still needs a real Sentinel-1 scene, which needs C).
 
 ### Environment reality check
 
 | Tool | State |
 |---|---|
 | Go 1.27.1, Node 24, Python 3.11 (uv) | ✅ Working |
-| Docker Desktop | ⚠️ Installed, **daemon not running** at handover (reboot was pending) |
+| Docker Desktop | ✅ Up as of 8 September 2026 |
 | WSL2 | ❌ Broken — `REGDB_E_CLASSNOTREG` |
 
 WSL2 blocks **OpenDrift (task F) only**. It does *not* block B–E: PyTorch, `rasterio` and `sentinelhub-py` all run natively on Windows. Don't let the broken WSL stop you starting.
 
 ---
 
-## A. Verify migration `002` on a live database
+## A. Verify migration `002` on a live database — ✅ done, 8 September 2026
 
-**Why first:** it's written but never executed. If it has an error, everything built on those tables inherits it.
+Applied via `docker compose up -d db` — both `001` and `002` run automatically through `docker-entrypoint-initdb.d` on first container init, no manual `-f` needed once the volume is fresh. All 12 tables confirmed present with correct indexes, FKs, and PostGIS geometry columns; the `evidence_dossiers` partial-unique-index behavior verified live (rejects a second `is_current=true` row, allows a second `is_current=false` one) via a rolled-back transaction. Full detail in `db/README.md`'s verification note.
 
-```bash
-docker compose up -d db
-docker compose exec db psql -U sagar -d sagardrishti -f /docker-entrypoint-initdb.d/002_core_pipeline.sql
-docker compose exec db psql -U sagar -d sagardrishti -c '\d detections' -c '\d suspects'
-```
-
-**Done when:** every table, index and constraint from `002` exists; the partial unique index on `evidence_dossiers` rejects a second `is_current=true` row for one detection. Then update `db/README.md`'s honesty note.
-
-**Watch for:** `GEOMETRY(Polygon, 4326)` needs PostGIS loaded (it is, from `001`). Migrations apply in numeric order — `002` has FKs into `scenes`, so `001` must have run.
+**Not yet done, and worth doing next:** this only proves the schema is *correct*, not that anything real is *in* it — `ais_positions`/`ais_static` are still empty (the recorder has never run), and nothing has inserted a real `scenes`/`detections` row outside the rolled-back test transaction above.
 
 ---
 

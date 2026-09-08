@@ -31,7 +31,16 @@ Image: `timescale/timescaledb-ha:pg16` (PostGIS included).
 
 **Column names and JSONB shapes mirror `services/api/app/schemas.py` closely on purpose** — the API's fixtures are meant to become close to a drop-in read of these tables, not a redesign. If you rename a field on one side, rename it on the other, or they will quietly drift apart the same way `ais_baseline_profiles`' `median_gap_seconds`/`p95_gap_seconds` almost did against an API layer that had independently invented `typical_gap_minutes_p50/p95` — caught only because someone checked the merged schema before writing fixtures against it, not because anything would have failed loudly.
 
-**Verification status of `002`, honestly:** parsed cleanly against PostgreSQL's actual grammar (`pglast`/`libpg_query`) — zero syntax errors across 22 statements — but that does not exercise PostGIS/TimescaleDB semantics (the `GEOMETRY` type, `create_hypertable()`) or prove the constraints are satisfiable. **Apply it to a live Postgres and confirm before relying on it**, the same way `001` was verified live in PR #1.
+**Verification status of `002`: live-verified, 8 September 2026.** Applied via `docker compose up -d db` (both `001` and `002` run automatically through `docker-entrypoint-initdb.d` on first container init) against `timescale/timescaledb-ha:pg16`. Confirmed:
+
+- All 12 tables from `001`+`002` exist, including `detections.geometry` and `scenes.footprint` as real `geometry(Polygon,4326)` columns with working GIST indexes — the PostGIS semantics `pglast` couldn't check are real.
+- `evidence_dossiers`'s partial unique index (`UNIQUE (detection_id) WHERE is_current`) does what it's for: a second `is_current=true` row for the same detection is rejected (`duplicate key value violates unique constraint "evidence_dossiers_one_current_idx"`), while a second row with `is_current=false` succeeds — the history mechanism works as designed, not just as declared.
+- `ship_detections.ais_match` is confirmed to carry no foreign-key constraint, matching the deliberate design (MMSI is unreliable, never enforced as a join key).
+- All foreign keys resolve correctly (`detections → scenes`, `suspects/drift_runs/evidence_dossiers/jobs → detections`, etc.).
+
+Verified via a rolled-back transaction (`BEGIN … ROLLBACK`) — no test rows were left in the database.
+
+**A machine-specific gotcha found during this verification, worth knowing before you hit it too:** on at least one dev machine there is a pre-existing **native Windows `postgres.exe` service already listening on host port 5432**, unrelated to this project. `docker compose exec db psql ...` (the command used above) is unaffected — it talks to the container directly. But anything connecting via `localhost:5432` from the Windows host — `aisd`/`aisgen` run natively, or the API's `dev-api` target pointed at a real `DATABASE_URL` — will silently hit the wrong Postgres and fail auth, not the container's. Full `docker compose up` (API-in-container talking to `db` by its compose hostname) is unaffected either way. If you hit `password authentication failed` against a `localhost` connection string despite the container being healthy, check `Get-NetTCPConnection -LocalPort 5432` before assuming the container is broken. Resolving the conflict (stopping the native service, or remapping the container's published port) is a per-machine decision, not something to fix in this repo's `docker-compose.yml`.
 
 ## Why TimescaleDB for AIS
 
