@@ -252,18 +252,29 @@ Naively it's 50 vessels × 96 release times × 100 members = 480,000 simulations
 
 ---
 
-## H. `sagar_attrib` M6 — attribution
+## H. `sagar_attrib` M6 — attribution — ✅ scoring built, gating/drift not started
 
 **Read [`SCORING_MODEL.md`](SCORING_MODEL.md) in full before touching this.** It's where the project both wins and is most capable of doing harm.
 
 ```
-1. GATE     backward reachability region → keep intersecting tracks    214 → 46
-2. FILTER   timing, kinematics, drift-score floor                       46 → 7
-3. SEED     interpolate tracks to 15-min steps, tag (vessel, time)
-4. ADVECT   ONE staggered OpenDrift run (see F)
-5. SCORE    overlap → drift_score, t*, slick age
-6. RANK     9-factor log-odds → Platt calibration → ranked suspects
+1. GATE     backward reachability region → keep intersecting tracks    214 → 46   ❌ not started
+2. FILTER   timing, kinematics, drift-score floor                       46 → 7    ❌ not started
+3. SEED     interpolate tracks to 15-min steps, tag (vessel, time)                ❌ not started
+4. ADVECT   ONE staggered OpenDrift run (see F)                                   ❌ blocked on OpenDrift/WSL2
+5. SCORE    overlap → drift_score, t*, slick age                                  ✅ built (factors.f1_drift_consistency)
+6. RANK     9-factor log-odds → Platt calibration → ranked suspects               ✅ built (model.py; hand-set priors only, no Platt fitting — calibrated=False on every Suspect)
 ```
+
+**What's done, in `packages/sagar_attrib`, 66 tests, all passing:** `quality_filter.py` (§2.1a pre-filter), `baseline.py` (§2.1b per-vessel gap profile), `gap_anomaly.py` (f4, kept in its own file since it's the safety-critical one), `factors.py` (f1–f3, f5–f9), `model.py` (combine → sigmoid → `rank_candidates` producing real `sagar_core.types.Suspect` objects). None of it needed Docker, WSL2, or credentials — every function takes already-extracted numeric/boolean features and returns a real, tested result.
+
+**What's deliberately NOT done:**
+- Steps 1–4 (the GATE/FILTER/SEED/ADVECT cascade, the 214→7 traffic filter, and the drift solve itself) — need `sagar_drift`/OpenDrift, blocked on the same broken WSL2 as task F.
+- **Not wired into `services/api`** — `/detections/{id}/suspects` still serves the fixture. Left alone on purpose: wiring a new, freshly-built scoring engine into an already-shipped, CI-green API surface in the same pass that built it would risk destabilising something that currently works. The API-wiring task is: build a `VesselFeatures` extractor from a raw AIS track (the one genuinely missing piece — everything downstream of "already-extracted features" is done), then swap `fixtures.SUSPECTS` for a real `rank_candidates(...)` call.
+
+**Three real bugs the tests themselves caught, worth knowing about before extending this further:**
+1. `zip(seq, seq[1:], strict=True)` in the original baseline-gap computation would have raised `ValueError` on **every non-empty input** — a sliding pairwise zip is unequal length by construction, and `strict=True` is for sequences that are supposed to match.
+2. `f7_off_lane_distance`'s first version (`max(-0.5, min(1.0, distance/saturation))`) could never actually reach its documented −0.5 floor for any physically valid (non-negative) distance — fixed by shifting the whole ramp, not just clamping it.
+3. The quality pre-filter's teleport check originally compared each record against the immediately preceding *raw* one; a single null-island glitch would then make the next genuinely good position look like a multi-thousand-knot jump and wrongly exclude it too. Fixed to compare against the last known-*reliable* record instead.
 
 **Overlap scoring** — the harmonic mean is deliberate:
 ```
@@ -271,17 +282,17 @@ hit(v,t)      = fraction of (v,t) particles inside the slick
 coverage(v,t) = fraction of slick covered by the (v,t) particle KDE
 drift_score   = max over t of  2·hit·coverage / (hit + coverage)
 ```
-`hit` alone rewards a plume that's a tiny dot inside a huge slick; `coverage` alone rewards one smeared everywhere. The F-measure penalises both.
+`hit` alone rewards a plume that's a tiny dot inside a huge slick; `coverage` alone rewards one smeared everywhere. The F-measure penalises both. `factors.f1_drift_consistency` implements exactly this formula and takes `hit`/`coverage` as arguments — it does not compute them.
 
-**Track interpolation:** great-circle with SOG/COG. **Never naive linear interpolation across long gaps** — it invents positions the vessel never occupied, and those fabricated positions then seed particles that generate fabricated evidence.
+**Track interpolation:** great-circle with SOG/COG. **Never naive linear interpolation across long gaps** — it invents positions the vessel never occupied, and those fabricated positions then seed particles that generate fabricated evidence. (Not yet needed by anything built so far — this applies to the still-unstarted SEED step.)
 
-### The AIS gap factor — the dangerous one
+### The AIS gap factor — the dangerous one — ✅ all three corrections implemented
 
-The naive version (*gap near spill = suspicious*) **is wrong and produces false accusations.** Gaps are overwhelmingly innocent: cheap transponders, out-of-range operation, bad data. Three corrections, all required:
+The naive version (*gap near spill = suspicious*) **is wrong and produces false accusations.** Gaps are overwhelmingly innocent: cheap transponders, out-of-range operation, bad data. Three corrections, all required, all built:
 
-1. **Data-quality pre-filter** — exclude MMSI 0, position (0,0), kinematically impossible implied speed (`sagar_core.geo.implied_speed_knots`), garbled static. Labelled `unreliable`, **removed from the evidence set — they neither boost nor penalise.**
-2. **Per-vessel baseline** — cached per MMSI (`ais_baseline_profiles`). Suspicion is deviation from *this vessel's own* normal behaviour. Without it, the factor measures transponder quality, not behaviour.
-3. **Coverage proxy** — distance-to-coast vs terrestrial AIS range (~40–75 nm). **Deliberately simple; do not build a radio propagation model.** The extra accuracy isn't worth the time and is harder to defend.
+1. **Data-quality pre-filter** (`quality_filter.py`) — exclude MMSI 0, position (0,0), kinematically impossible implied speed (`sagar_core.geo.implied_speed_knots`), garbled static. Labelled `unreliable`, **removed from the evidence set — they neither boost nor penalise.**
+2. **Per-vessel baseline** (`baseline.py`) — computed from a vessel's own reliable history. Suspicion is deviation from *this vessel's own* normal behaviour. Without it, the factor measures transponder quality, not behaviour. A vessel with no history yet (`has_sufficient_history=False`) falls back to a documented conservative constant and is marked `FactorConfidence.LOW` — never silently scored against a fleet average.
+3. **Coverage proxy** (`gap_anomaly.py`) — distance-to-coast vs terrestrial AIS range (~40–75 nm), a smooth ramp rather than a hard step. **Deliberately simple; do not build a radio propagation model.** The extra accuracy isn't worth the time and is harder to defend.
 
 **And f₄ is never a standalone trigger.** Nine weighted inputs against an intercept of −4.0; drift consistency (2.5) dominates by design.
 

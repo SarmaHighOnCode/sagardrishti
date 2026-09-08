@@ -4,15 +4,37 @@ Traffic gating, drift overlap scoring, and the suspect model. **Owner: AIS/attri
 
 > **This is where the project wins, and where it is most capable of doing harm.** Read [`SCORING_MODEL.md`](../../docs/SCORING_MODEL.md) in full before changing anything here.
 
+## Status: steps 5–6 (scoring) built and tested. Steps 1–4 (gating, drift) not started.
+
+```bash
+cd packages/sagar_attrib  # or run from repo root — pytest finds it either way
+pytest ../../packages/sagar_attrib -v   # 66 tests
+```
+
+| Module | Does | Status |
+|---|---|---|
+| `quality_filter.py` | §2.1(a) data-quality pre-filter — MMSI 0, null island, out-of-range, impossible implied speed | ✅ Built, tested |
+| `baseline.py` | §2.1(b) per-vessel baseline gap profile (median/p95/sample count) | ✅ Built, tested |
+| `gap_anomaly.py` | f4 — deviation from own baseline × coverage proxy | ✅ Built, tested (own file — the safety-critical factor) |
+| `factors.py` | f1, f2, f3, f5–f9 | ✅ Built, tested |
+| `model.py` | Combine into logit → sigmoid → ranked `Suspect` list | ✅ Built, tested |
+| GATE/FILTER (214→46→19→11→7 cascade) | — | ❌ Not started |
+| SEED/ADVECT (drift solve itself) | — | ❌ Blocked on `sagar_drift`/OpenDrift (WSL2 broken) |
+| Wiring into `services/api`'s fixture-backed `/suspects` endpoint | — | ❌ Not started — deliberately left alone rather than risk destabilising a shipped, CI-green surface in the same pass that built the scoring engine |
+
+**The honest boundary, stated in `factors.py`'s own docstring for `f1_drift_consistency`:** this module does not run OpenDrift and never will (that's `sagar_drift`'s job). `f1` takes `hit`/`coverage` — the output of an M5 ensemble solve — as arguments. Every other factor (f2–f9, including the safety-critical f4) is genuinely computed here from AIS + context data, no external physics needed.
+
+**Every claim above is backed by a passing test**, including three real bugs the tests themselves caught during development: `zip(seq, seq[1:], strict=True)` in the baseline-gap computation would have raised on every non-empty input (sliding-pairwise zips are unequal length by construction); `f7_off_lane_distance`'s original formula could never actually reach its documented negative floor for any physically valid distance; and the teleport check originally would have let one bad GPS glitch cascade into wrongly excluding every good position that followed it.
+
 ## Pipeline
 
 ```
-1  GATE       backward reachability region -> keep intersecting tracks   214 -> 46
-2  FILTER     timing, kinematics, drift-score floor                       46 -> 7
-3  SEED       interpolate tracks to 15-min steps, tag (vessel, time)
-4  ADVECT     ONE staggered OpenDrift run, ensembled              (sagar_drift)
-5  SCORE      overlap -> drift_score, t*, slick age
-6  RANK       9-factor log-odds -> Platt calibration -> ranked suspects
+1  GATE       backward reachability region -> keep intersecting tracks   214 -> 46    ❌ not started
+2  FILTER     timing, kinematics, drift-score floor                       46 -> 7     ❌ not started
+3  SEED       interpolate tracks to 15-min steps, tag (vessel, time)                  ❌ not started
+4  ADVECT     ONE staggered OpenDrift run, ensembled              (sagar_drift)       ❌ blocked on OpenDrift/WSL2
+5  SCORE      overlap -> drift_score, t*, slick age                                   ✅ factors.f1_drift_consistency
+6  RANK       9-factor log-odds -> Platt calibration -> ranked suspects               ✅ model.py (hand-set priors only — no Platt fitting yet, calibrated=False)
 ```
 
 ## Overlap scoring
