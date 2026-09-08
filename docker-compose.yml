@@ -97,6 +97,24 @@ services:
     volumes:
       - aiswal:/wal
 
+  # Synthetic AIS generator. Runs one simulation and exits — not a
+  # daemon like aisd, so no restart policy or healthcheck. Needs no
+  # credentials, only a database, so it can run the moment `db` is up.
+  #   docker compose --profile aisgen run --rm aisgen
+  # Verified live against this exact service definition, 8 September
+  # 2026 — see docs/HANDOVER.md task G and packages/go/store's
+  # INCLUDING DEFAULTS fix (the bug this first live run found).
+  aisgen:
+    profiles: [aisgen]
+    build: { context: ., dockerfile: infra/docker/aisgen.Dockerfile }
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      SAGAR_AISGEN_GROUND_TRUTH_PATH: /data/aisgen_ground_truth.json
+    depends_on:
+      db: { condition: service_healthy }
+    volumes:
+      - ./data:/data
+
   web:
     build: { context: ./web, dockerfile: ../infra/docker/web.Dockerfile }
     ports: ["5173:5173"]

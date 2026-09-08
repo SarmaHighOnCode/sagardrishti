@@ -127,8 +127,19 @@ func (s *Store) copyUpsert(ctx context.Context, target, stagingName string, colu
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck // no-op if Commit already succeeded
 
+	// INCLUDING DEFAULTS matters: plain `LIKE target` copies column types
+	// and NOT NULL constraints but NOT default expressions. ais_positions
+	// and ais_static both have `recorded_at TIMESTAMPTZ NOT NULL DEFAULT
+	// now()`, and columns is deliberately built without recorded_at (see
+	// positionColumns/staticColumns above — the caller never supplies it,
+	// Postgres is meant to stamp it). Without this clause the staging
+	// table inherits the NOT NULL constraint but not the default that
+	// satisfies it, so every COPY row fails with "null value in column
+	// recorded_at violates not-null constraint" — found live, the first
+	// time this code ever ran against a real Postgres rather than the
+	// nil-pool no-op case store_test.go could exercise without one.
 	createSQL := fmt.Sprintf(
-		`CREATE TEMP TABLE %s (LIKE %s) ON COMMIT DROP`, stagingName, target,
+		`CREATE TEMP TABLE %s (LIKE %s INCLUDING DEFAULTS) ON COMMIT DROP`, stagingName, target,
 	)
 	if _, err := tx.Exec(ctx, createSQL); err != nil {
 		return fmt.Errorf("create staging table: %w", err)

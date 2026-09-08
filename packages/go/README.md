@@ -4,7 +4,7 @@ Shared Go libraries for the AIS data plane. See [ADR 0005](../../docs/adr/0005-g
 
 | Package | Purpose |
 |---|---|
-| [`store`](store/) | Batched COPY + `ON CONFLICT DO NOTHING` upsert into `ais_positions`/`ais_static`. Promoted out of `services/aisd/internal/store` (5 Sept 2026) so `services/aisgen` writes through the exact same code `aisd` does |
+| [`store`](store/) | Batched COPY + `ON CONFLICT DO NOTHING` upsert into `ais_positions`/`ais_static`. Promoted out of `services/aisd/internal/store` (5 Sept 2026) so `services/aisgen` writes through the exact same code `aisd` does. **Live-verified against a real Postgres 8 Sept 2026** via `aisgen` — that run caught a real bug (staging table missing `recorded_at`'s default, fixed with `INCLUDING DEFAULTS`), now guarded by `store_integration_test.go` |
 | [`aoi`](aoi/) | Area-of-interest bounding boxes and point classification. Promoted alongside `store` so both binaries tag rows using identical box definitions |
 | [`quality`](quality/) | Data-quality pre-filter (`ok`/`unreliable`) applied to every position/static row. Promoted alongside `store` |
 | [`geo`](geo/) | Haversine distance, initial bearing, linear interpolation — the geodesic primitives `aisgen`'s lane-following logic needs. Was an empty placeholder until `aisgen` needed it |

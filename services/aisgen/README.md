@@ -2,7 +2,7 @@
 
 Generates physically plausible AIS traffic with labelled ground-truth discharge events.
 
-## Status: built, verified in dry-run, not yet run against a live database
+## Status: built and live-verified against a real Postgres (8 September 2026)
 
 ```bash
 cd services/aisgen
@@ -13,13 +13,15 @@ SAGAR_AISGEN_VESSELS=25 SAGAR_AISGEN_DURATION_HOURS=6 SAGAR_AISGEN_SEED=1 \
   SAGAR_AISGEN_OUT_DIR=./out go run ./cmd/aisgen
 # → ./out/positions.jsonl, ./out/statics.jsonl, ./out/aisgen_ground_truth.json
 
-# Once a real database exists:
-DATABASE_URL=postgresql://... go run ./cmd/aisgen
+# Against a real database, the way the team should actually run this:
+docker compose --profile aisgen run --rm aisgen
 ```
 
-A run like the one above produced 5,204 position rows, 178 static rows and 13 ground-truth events (including all three confounder types below and one discharger) in well under a second.
+A run like the dry-run above produced 5,204 position rows, 178 static rows and 13 ground-truth events (including all three confounder types below and one discharger) in well under a second.
 
-See `docs/HANDOVER.md` task G for the full state — what's genuinely done, and the two things that are explicit placeholders (hand-specified lane geometry instead of KDE-fitted; never executed against a live Postgres) rather than silently assumed finished.
+**The `docker compose` form is live-verified**, not aspirational: it wrote 33,094 position rows and 1,037 static rows across 46 vessels into the real `sagardrishti` database, confirmed by query, then the table was truncated back to empty (same "prove it, then leave it clean" convention as `docs/HANDOVER.md` task A). That first live run found and fixed a real bug in `packages/go/store` — see task G for the full story, including the regression test now guarding it (`packages/go/store/store_integration_test.go`).
+
+See `docs/HANDOVER.md` task G for the full state — what's genuinely done, and the one thing that's still an explicit placeholder (hand-specified lane geometry instead of KDE-fitted, since `aisd` has never recorded real traffic to fit against).
 
 ## This is a deliverable, not a fallback
 
