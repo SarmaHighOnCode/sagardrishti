@@ -1,10 +1,15 @@
 """GET /detections, GET /detections/{id}, /suspects, /hindcast, /forecast,
 /audit, POST /detections/{id}/evidence.
 
-/suspects and /audit are fully fixture-backed and exercise the two
-contract rules that matter most here: every Suspect carries its
-uncertainty pair, and every excluded/negative-evidence path is visible
-rather than hidden (docs/SCORING_MODEL.md §7).
+/suspects is now genuinely scored by packages/sagar_attrib
+(see ../attribution.py for exactly what that means and does not mean —
+several of its inputs are still fixture placeholders, named individually
+there, standing in for M5/lane-KDE/etc). /audit remains fully
+fixture-backed — the 214→7 cascade itself is not built yet (docs/
+HANDOVER.md task H). Both exercise the two contract rules that matter
+most here: every Suspect carries its uncertainty pair, and every
+excluded/negative-evidence path is visible rather than hidden
+(docs/SCORING_MODEL.md §7).
 
 /hindcast and /forecast return 501 — there is no drift engine (M5) or
 raster tiler yet, and the contract is explicit that rasters are served
@@ -16,7 +21,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query
 
-from .. import fixtures
+from .. import attribution, fixtures
 from ..errors import not_found, not_implemented, problem_responses
 from ..schemas import AuditTrail, Detection, Page, Suspect
 
@@ -51,7 +56,7 @@ def get_detection(detection_id: str):
 def get_suspects(detection_id: str):
     if detection_id not in fixtures.DETECTIONS:
         return not_found(f"no detection with id {detection_id!r}")
-    return fixtures.SUSPECTS_BY_DETECTION.get(detection_id, [])
+    return attribution.score_suspects(detection_id)
 
 
 @router.get("/{detection_id}/hindcast", responses=problem_responses(404, 501))

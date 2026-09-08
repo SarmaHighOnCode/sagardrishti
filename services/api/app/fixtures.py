@@ -5,12 +5,19 @@ pipeline (M1-M7) and a live database exist. None of this is a real
 detection or a real vessel.
 
 Deliberately kept identifier-for-identifier consistent with
-web/src/lib/fixtures.ts (same scene id, same detection ids, same MMSIs,
-same confidence/factor numbers) so that swapping the console from its
-local fixtures to a real fetch against this API changes nothing about
-what the demo looks like. If you change a value on one side, change it
-on the other, or the two fixture sets will quietly drift apart and the
-"day the API goes live" swap will look like a regression.
+web/src/lib/fixtures.ts (same scene id, same detection ids, same MMSIs)
+so that swapping the console from its local fixtures to a real fetch
+against this API changes nothing about what the demo looks like. If you
+change a value on one side, change it on the other, or the two fixture
+sets will quietly drift apart and the "day the API goes live" swap will
+look like a regression.
+
+**Exception: suspect posterior/factor numbers.** Those are no longer
+hand-kept in sync — ../attribution.py computes them for real from the
+AIS tracks and vessel data below via packages/sagar_attrib. Expect the
+console's own local SAMPLE_SUSPECTS numbers (used only in isolated
+component tests, never fetched from a live API) to disagree with what
+this file's data actually produces; that disagreement is not a bug.
 =====================================================================
 """
 
@@ -23,7 +30,6 @@ from .schemas import (
     AisTrack,
     AisTrackPoint,
     BaselineGapProfile,
-    DataQualitySummary,
     Detection,
     DetectionAttributes,
     GeoPoint,
@@ -31,8 +37,6 @@ from .schemas import (
     Penalty,
     Scene,
     ShipDetection,
-    Suspect,
-    SuspectFactor,
     VesselStatic,
 )
 
@@ -151,101 +155,11 @@ AUDIT_TRAIL = {
     "final_candidate_count": 7,
 }
 
-# Suspects — matches SAMPLE_TRACKS mmsi/rank/posterior in the console
-# fixtures, and reproduces the contract's own worked suspect example
-# verbatim for MMSI 419001234.
-SUSPECT_1 = Suspect(
-    rank=1,
-    mmsi="419001234",
-    imo="9123221",
-    vessel_name="SYNTHETIC VESSEL A",
-    vessel_type="tanker",
-    posterior=0.71,
-    calibrated=True,
-    inferred_release_utc="2026-05-25T06:40:00Z",
-    inferred_release_ci_minutes=50,
-    slick_age_hours=7.3,
-    slick_age_ci=(5.9, 8.8),
-    factors=[
-        SuspectFactor(
-            name="drift_consistency", value=0.81, weight=2.5, contribution=2.14, confidence="high"
-        ),
-        SuspectFactor(
-            name="course_alignment", value=0.94, weight=1.4, contribution=1.87, confidence="high"
-        ),
-        SuspectFactor(
-            name="ais_gap_anomaly",
-            value=0.62,
-            weight=1.3,
-            contribution=1.32,
-            confidence="medium",
-            note="gap 3.1x this vessel's own baseline; good coverage at position",
-        ),
-        SuspectFactor(
-            name="speed_anomaly", value=0.68, weight=1.1, contribution=0.94, confidence="high"
-        ),
-        SuspectFactor(
-            name="night_time_release",
-            value=1.0,
-            weight=0.5,
-            contribution=0.41,
-            confidence="high",
-        ),
-        SuspectFactor(
-            # Negative contribution — exculpatory, and never hidden.
-            name="off_lane_distance",
-            value=-0.17,
-            weight=0.8,
-            contribution=-0.22,
-            confidence="high",
-        ),
-    ],
-    data_quality=DataQualitySummary(
-        records_used=412,
-        records_excluded=7,
-        exclusion_reasons={"impossible_speed": 5, "null_island": 2},
-    ),
-)
-
-SUSPECT_2 = Suspect(
-    rank=2,
-    mmsi="563889000",
-    imo=None,
-    vessel_name="SYNTHETIC VESSEL B",
-    vessel_type="container",
-    posterior=0.44,
-    calibrated=True,
-    inferred_release_utc="2026-05-25T05:55:00Z",
-    inferred_release_ci_minutes=70,
-    slick_age_hours=8.1,
-    slick_age_ci=(6.2, 10.4),
-    factors=[
-        SuspectFactor(
-            name="drift_consistency", value=0.52, weight=2.5, contribution=1.30, confidence="medium"
-        ),
-        SuspectFactor(
-            name="course_alignment", value=0.61, weight=1.4, contribution=0.85, confidence="medium"
-        ),
-        SuspectFactor(
-            name="ais_gap_anomaly",
-            value=0.10,
-            weight=1.3,
-            contribution=0.13,
-            confidence="low",
-            note=(
-                "vessel has under 2 weeks of recorded history — baseline "
-                "is a class prior, not this vessel's own"
-            ),
-        ),
-    ],
-    data_quality=DataQualitySummary(
-        records_used=58, records_excluded=1, exclusion_reasons={"null_island": 1}
-    ),
-)
-
-SUSPECTS_BY_DETECTION: dict[str, list[Suspect]] = {
-    DETECTION_OIL.id: [SUSPECT_1, SUSPECT_2],
-}
+# Suspects for DETECTION_OIL are no longer hardcoded here — see
+# ../attribution.py, which scores them for real from the AIS tracks and
+# vessel data below via packages/sagar_attrib. The candidate MMSI list
+# for each detection (attribution._CANDIDATE_MMSIS_BY_DETECTION) still
+# names 419001234 and 563889000, matching what used to be asserted here.
 
 # AIS tracks — matching SAMPLE_TRACKS' paths in the console fixtures
 # exactly, for all three vessels, not just the top suspect. Vessel B and
