@@ -122,18 +122,30 @@ func TestConsumeFlushesAtBatchSizeAndRotatesWAL(t *testing.T) {
 		in <- samplePositionEnvelope(int64(1000+i), 19.0, 72.8)
 	}
 
+	// flush() writes to the DB, THEN calls wal.Rotate() — see recorder.go.
+	// db.totalPositions() reaching 3 only proves the DB write happened;
+	// Rotate() is a separate step straight after it, with no
+	// synchronization the test can observe other than the WAL directory
+	// itself. Waiting on the DB counter alone and then immediately
+	// reading the directory is a real race: on a loaded CI runner the
+	// goroutine can be observed between "DB write done" and "Rotate
+	// done", making this test fail for a reason that has nothing to do
+	// with a regression. Poll on the actual post-condition instead.
 	deadline := time.After(2 * time.Second)
-	for db.totalPositions() < 3 {
+	var entries []os.DirEntry
+	for {
+		entries, _ = os.ReadDir(dir)
+		if db.totalPositions() >= 3 && len(entries) == 1 {
+			break
+		}
 		select {
 		case <-deadline:
-			t.Fatalf("timed out waiting for flush, got %d rows", db.totalPositions())
+			t.Fatalf(
+				"timed out waiting for flush+rotate: %d rows written, %d WAL segment(s) present",
+				db.totalPositions(), len(entries),
+			)
 		case <-time.After(10 * time.Millisecond):
 		}
-	}
-
-	entries, _ := os.ReadDir(dir)
-	if len(entries) != 1 {
-		t.Errorf("expected exactly 1 (fresh, post-rotate) WAL segment, got %d", len(entries))
 	}
 
 	cancel()
