@@ -37,10 +37,11 @@ These are not style preferences. Each one exists because violating it produces a
 | `services/aisd` | ✅ Merged (PR #1), 34 tests | Go AIS recorder. Live-verified against a real Postgres |
 | `db/schema/001` | ✅ Live-verified | AIS tables |
 | `db/schema/002` | ⚠️ **Parse-verified only** | Never run against a live Postgres — **do this first once Docker works** |
-| `web/` | ✅ Console UI, 132 tests | Data-driven; `lib/fixtures.ts` still exists and defines the shared demo identifiers the server fixtures match, but components no longer import it directly |
+| `web/` | ✅ Console UI, 201 tests | Data-driven, CORS-connected to a running API; see `docs/FRONTEND_CONTRACT.md` |
+| `packages/go/{store,aoi,quality,geo}` | ✅ Shared, tested | Promoted out of `services/aisd/internal/*` — see ADR 0005 and task G |
 | `packages/sagar_{ingest,sar,drift,attrib,evidence}` | ❌ Empty | READMEs only |
 | `services/worker` | ❌ Empty | |
-| `services/aisgen` | ❌ Empty | |
+| `services/aisgen` | ⚠️ Generates real rows, never hit a live DB | 32 tests, dry-run verified end-to-end — see task G |
 
 **PRs #2, #3, #6 all merged.** No open PRs at this point in the handover — task order below reflects `main` as of the merge of #6.
 
@@ -65,7 +66,7 @@ Later tasks assume earlier ones. Deviating is fine if you know why.
   D. sagar_sar M1 (preprocess)               ← everything SAR needs it
   E. sagar_sar M2 (detect)  ─┐
   F. sagar_drift M5         ─┼─ can proceed in parallel once C+D land
-  G. aisgen                 ─┘
+  G. aisgen                 ─┘  ← DONE except live-DB verification (Docker)
   H. sagar_attrib M6                         ← needs F + G
   I. services/worker                         ← needs D–H
   J. sagar_evidence M7                       ← needs I
@@ -236,19 +237,26 @@ Naively it's 50 vessels × 96 release times × 100 members = 480,000 simulations
 
 ---
 
-## G. `services/aisgen` — synthetic AIS
+## G. `services/aisgen` — synthetic AIS — ✅ mostly done
 
 **This is a deliverable, not a fallback** — bulk historical AIS for Indian waters isn't publicly available, and this is the **only** source of attribution ground truth, so it's the only way to compute accuracy at all.
 
-**Read [ADR 0005](adr/0005-go-for-the-ais-data-plane.md) first.** It was corrected: AISStream sends **pre-decoded JSON, not AIVDM**, so there is no wire codec to share.
+**The `internal/` visibility blocker is fixed.** `store`, `aoi`, and `quality` are promoted out of `services/aisd/internal/*` into `packages/go/{store,aoi,quality}` (a real, tested, shared module — not a `go.work` workspace; each module's `go.mod` uses a `replace` directive pointing at `../../packages/go`, which is simpler and works identically regardless of which directory CI happens to run from). `packages/go/geo` — previously an empty placeholder — now holds the haversine/bearing/interpolation helpers `aisgen`'s lane math needs. `aisd` was rewired to the same promoted packages and its own test suite is unchanged and still green.
 
-**The blocker you will hit:** the guarantee that synthetic and real AIS share an ingest path now rests on `aisgen` calling `aisd`'s `internal/store` — but Go's `internal/` visibility rule means `services/aisgen` (a separate module) **cannot import it**. Promote the writer to `packages/go/store` and have both modules depend on it via a `go.work` workspace.
+`services/aisgen` is a real, working Go module: `internal/lanes` (hand-specified centrelines — see the honest limitation noted in its own doc comment), `internal/fleet` (typed vessel generation), `internal/confounders` (AIS gaps, position jumps, MMSI duplication), `internal/groundtruth` (labelled discharge events as JSON), `internal/simulate` (the tick-based orchestrator), and `cmd/aisgen` (the binary). 32 tests, all pure-function — no Postgres needed to run them.
 
-> **Do not "solve" this by copy-pasting the insert logic.** That silently reopens the exact gap the ADR exists to close, and nothing will fail loudly when the two diverge.
+**What's genuinely done:**
+- Writes through `packages/go/store.WritePositions`/`WriteStatic` when `DATABASE_URL` is set — the exact same batched-upsert code `aisd` uses. Verified structurally: `TestPositionsAndStaticsAreAisdsOwnStoreTypes` (in `internal/simulate`) is the round-trip parity test the original README asked for, checking via reflection that `Result.Positions`/`Statics` are literally `packages/go/store`'s row types.
+- **Dry-run mode** (`DATABASE_URL` unset) writes JSONL instead — this is how it was verified end-to-end without a live database (Docker was still down at the time): `go run ./cmd/aisgen` with 25 vessels/6h produced 5,204 position rows, 178 static rows, 13 ground-truth events, including all three confounder types and one discharger.
+- Deterministic for a given seed (`TestRunIsDeterministicForAGivenSeed`) — needed for reproducible eval runs.
+- Vessel type distribution, MMSI range (900000000+, chosen to never collide with a real MID), per-type speed/dimension profiles.
 
-**Requirements:** lane geometry from recorded AISStream data (KDE → centrelines) · realistic per-type SOG/COG/reporting intervals · **labelled ground-truth discharge events** · realistic confounders.
+**What's still a placeholder, stated plainly:**
+- **Lane geometry is hand-specified**, not the KDE-fitted centrelines from recorded traffic the requirement actually calls for — because `aisd` has never recorded a single row. `internal/lanes/lanes.go`'s doc comment says so explicitly and must not go stale once real traffic exists to fit against.
+- The innocent-near-slick case is found by scanning generated positions for proximity (≤15km) at the discharge time, not specially routed — empirically fires in roughly 1 of 10 runs at 40 vessels. Real, not dead code, but infrequent; a future pass could deliberately route one vessel near the discharge instead of relying on chance.
+- **Never run against a live database** — same Docker blocker as Task A. Once Docker is up: `DATABASE_URL=... go run ./cmd/aisgen` and confirm rows land in `ais_positions`/`ais_static` with `source='aisgen'`.
 
-**The confounders matter most for honesty:** include vessels with genuinely flaky transponders, vessels legitimately out of coverage, and innocent vessels passing near the slick at the right time. If the model ranks these highly, that's a real finding — better discovered here than by a jury.
+> The original warning stands for anyone touching this further: **do not "solve" a future integration problem by copy-pasting the insert logic** instead of importing `packages/go/store`. That silently reopens the exact gap ADR 0005 exists to close.
 
 ---
 
@@ -338,7 +346,7 @@ make lint          # ruff + tsc + eslint + go vet
 | Drift results confident but wrong | Weathering on a backward run, or a units slip (knots vs m/s) |
 | Attribution ranks obviously-innocent vessels | AIS gap factor uncorrected — [`SCORING_MODEL.md`](SCORING_MODEL.md) §2.1 |
 | Everything works locally, hangs at the venue | A cache miss silently fetching — [`OFFLINE_MODE.md`](OFFLINE_MODE.md) |
-| `aisgen` can't import `aisd`'s store | Go `internal/` visibility — see G |
+| ~~`aisgen` can't import `aisd`'s store~~ — fixed, see G | Was Go `internal/` visibility; resolved by promoting to `packages/go` |
 | `uv venv --python 3.11` fails with `REGDB_E_CLASSNOTREG`-style path error | uv's cached interpreter is corrupt: `uv python uninstall 3.11 && uv python install 3.11` |
 | Web tests fail on a missing `@testing-library/react` | `node_modules` is stale relative to `package.json` — run `npm install` |
 

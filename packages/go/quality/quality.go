@@ -2,6 +2,12 @@
 // them. See db/README.md: rows failing the pre-filter are marked
 // `unreliable`, never deleted, so they stay auditable and scoring queries
 // can exclude them explicitly.
+//
+// Promoted out of services/aisd/internal/quality (5 Sept 2026, see ADR
+// 0005) so services/aisgen's deliberately-implausible confounder rows
+// (see its internal/confounders package) get flagged by the exact same
+// gate real bad data would trip, instead of a second gate that could
+// disagree with it.
 package quality
 
 import "math"

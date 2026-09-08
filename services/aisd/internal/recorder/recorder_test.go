@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/sagardrishti/aisd/internal/aisstream"
-	"github.com/sagardrishti/aisd/internal/aoi"
-	"github.com/sagardrishti/aisd/internal/store"
 	"github.com/sagardrishti/aisd/internal/wal"
+	"github.com/sagardrishti/go/aoi"
+	"github.com/sagardrishti/go/store"
 )
 
 type fakeDB struct {

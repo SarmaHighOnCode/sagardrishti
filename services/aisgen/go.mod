@@ -1,17 +1,16 @@
-module github.com/sagardrishti/aisd
+module github.com/sagardrishti/aisgen
 
 go 1.23.0
 
 toolchain go1.23.4
 
-// Unpublished: packages/go has no remote tag anywhere, so the version
-// below is a placeholder pseudo-version that only resolves because of
-// the replace directive. See ADR 0005's Consequences section for why
-// this promotion exists — services/aisgen depends on the same package.
+// Unpublished, same as services/aisd's replace of the same module — see
+// ADR 0005. This is the whole point of aisgen existing as Go: it writes
+// through the exact same packages/go/store batched-upsert code aisd uses,
+// not a second, parallel implementation of the insert logic.
 replace github.com/sagardrishti/go => ../../packages/go
 
 require (
-	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/sagardrishti/go v0.0.0-00010101000000-000000000000
 )

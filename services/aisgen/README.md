@@ -2,6 +2,25 @@
 
 Generates physically plausible AIS traffic with labelled ground-truth discharge events.
 
+## Status: built, verified in dry-run, not yet run against a live database
+
+```bash
+cd services/aisgen
+go build ./... && go vet ./... && go test ./...   # 32 tests, all pure-function
+
+# Dry-run — no DATABASE_URL needed. Writes JSONL instead of Postgres.
+SAGAR_AISGEN_VESSELS=25 SAGAR_AISGEN_DURATION_HOURS=6 SAGAR_AISGEN_SEED=1 \
+  SAGAR_AISGEN_OUT_DIR=./out go run ./cmd/aisgen
+# → ./out/positions.jsonl, ./out/statics.jsonl, ./out/aisgen_ground_truth.json
+
+# Once a real database exists:
+DATABASE_URL=postgresql://... go run ./cmd/aisgen
+```
+
+A run like the one above produced 5,204 position rows, 178 static rows and 13 ground-truth events (including all three confounder types below and one discharger) in well under a second.
+
+See `docs/HANDOVER.md` task G for the full state — what's genuinely done, and the two things that are explicit placeholders (hand-specified lane geometry instead of KDE-fitted; never executed against a live Postgres) rather than silently assumed finished.
+
 ## This is a deliverable, not a fallback
 
 The problem statement explicitly permits synthetic AIS. Bulk historical AIS for Indian waters is not publicly available — free sources are live-only and terrestrial-only, commercial providers consolidated further through 2026.
@@ -10,22 +29,22 @@ The problem statement explicitly permits synthetic AIS. Bulk historical AIS for 
 
 ## Requirements
 
-| # | Requirement | Why |
-|---|---|---|
-| 1 | Lane geometry from recorded AISStream data — KDE of positions to centrelines and widths | Grounded in real Indian traffic, not invented |
-| 2 | Vessel types from realistic Indian-waters distributions | Tanker / container / bulker / fishing / tug |
-| 3 | Per-type SOG distributions, COG jitter, correct reporting intervals | Class A: 2–10 s underway, 3 min at anchor, decimated for receiver gaps |
-| 4 | **Written through `aisd`'s own `internal/store` batched-upsert path** | The same code that writes real messages — see below |
-| 5 | **Labelled discharge events** — vessel, time, location, rate | The ground truth. Without this, attribution accuracy is unmeasurable |
-| 6 | Realistic confounders | AIS gaps, MMSI spoofing and duplication, position jumps, innocent vessels near the slick |
+| # | Requirement | Why | Status |
+|---|---|---|---|
+| 1 | Lane geometry from recorded AISStream data — KDE of positions to centrelines and widths | Grounded in real Indian traffic, not invented | ⚠️ **Placeholder.** `internal/lanes` uses hand-specified centrelines from public knowledge of Indian shipping corridors — `aisd` has never recorded a row to fit a KDE against. See that package's doc comment |
+| 2 | Vessel types from realistic Indian-waters distributions | Tanker / container / bulker / fishing / tug | ✅ `internal/fleet` — weighted distribution, per-type speed/length/beam ranges |
+| 3 | Per-type SOG distributions, COG jitter, correct reporting intervals | Class A: 2–10 s underway, 3 min at anchor, decimated for receiver gaps | ✅/⚠️ SOG jitter and COG jitter are real (`internal/simulate`); the reporting interval is a configurable demo-scale constant (`SAGAR_AISGEN_REPORT_INTERVAL_SECONDS`, default 120s), not real Class A cadence — see the honest note in `simulate.Config.ReportInterval`'s doc comment for why |
+| 4 | **Written through `aisd`'s own `internal/store` batched-upsert path** | The same code that writes real messages — see below | ✅ Done — see below |
+| 5 | **Labelled discharge events** — vessel, time, location, rate | The ground truth. Without this, attribution accuracy is unmeasurable | ✅ `internal/groundtruth` |
+| 6 | Realistic confounders | AIS gaps, MMSI spoofing and duplication, position jumps, innocent vessels near the slick | ✅ `internal/confounders` (gaps, jumps, MMSI duplication) + `internal/simulate`'s proximity scan for the innocent-near-slick case (fires in roughly 1 of 10 runs at 40 vessels — real, not dead code, but not guaranteed every run) |
 
-## Requirement 4 is the important one
+## Requirement 4 is the important one — done
 
 > **Corrected 5 Sept 2026.** This requirement originally called for "valid bit-level encoding via a shared `aiscodec` package" — the assumption being that AISStream sends raw AIVDM/NMEA, decoded by `aisd` and re-encoded by `aisgen` through the same codec. That assumption was wrong: **AISStream sends pre-decoded JSON.** There is no AIVDM on this wire, so there was never anything for a codec to decode or encode. See [ADR 0005](../../docs/adr/0005-go-for-the-ais-data-plane.md) for the full correction.
 
-The guarantee is implemented one layer downstream of where it was originally planned: `aisgen` must import and call `aisd`'s `internal/store` package directly (promoted to a location both binaries can import) rather than writing its own INSERT logic. Synthetic rows land in `ais_positions` through **the exact same batched-upsert code** that real messages go through.
+The guarantee is implemented one layer downstream of where it was originally planned: `aisgen` imports and calls `packages/go/store` directly (promoted out of `services/aisd/internal/store` — see [ADR 0005](../../docs/adr/0005-go-for-the-ais-data-plane.md)) rather than writing its own INSERT logic. Synthetic rows land in `ais_positions` through **the exact same batched-upsert code** that real messages go through — `cmd/aisgen/main.go`'s `writeToStore` calls `store.WritePositions`/`WriteStatic`, nothing else.
 
-That is what makes *"the ingest path is identical for real and synthetic data"* structurally true rather than a claim we make on a slide — sameness of the database row, not sameness of a wire decoder. A test asserting `aisd` and `aisgen` produce byte-identical rows for equivalent input is the guarantee behind it, and it must exist before this claim is repeated anywhere else (a slide, the evidence dossier, a viva answer).
+That is what makes *"the ingest path is identical for real and synthetic data"* structurally true rather than a claim we make on a slide — sameness of the database row, not sameness of a wire decoder. `internal/simulate/simulate_test.go`'s `TestPositionsAndStaticsAreAisdsOwnStoreTypes` is the test asserting this: it checks, via reflection, that the rows `simulate.Run` returns are literally `store.PositionRow`/`store.StaticRow` — the same struct `aisd`'s own recorder builds — not a parallel type that merely looks similar.
 
 ## Requirement 6 deserves care
 
